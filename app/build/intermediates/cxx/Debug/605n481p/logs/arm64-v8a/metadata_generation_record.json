@@ -1,0 +1,119 @@
+[
+  {
+    "level_": 0,
+    "message_": "Start JSON generation. Platform version: 26 min SDK version: arm64-v8a",
+    "file_": "C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\src\\main\\CMakeLists.txt",
+    "tag_": "debug|arm64-v8a",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "rebuilding JSON C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\.cxx\\Debug\\605n481p\\arm64-v8a\\android_gradle_build.json due to:",
+    "file_": "C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\src\\main\\CMakeLists.txt",
+    "tag_": "debug|arm64-v8a",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "- no fingerprint file, will remove stale configuration folder",
+    "file_": "C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\src\\main\\CMakeLists.txt",
+    "tag_": "debug|arm64-v8a",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "removing stale contents from \u0027C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\.cxx\\Debug\\605n481p\\arm64-v8a\u0027",
+    "file_": "C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\src\\main\\CMakeLists.txt",
+    "tag_": "debug|arm64-v8a",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "created folder \u0027C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\.cxx\\Debug\\605n481p\\arm64-v8a\u0027",
+    "file_": "C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\src\\main\\CMakeLists.txt",
+    "tag_": "debug|arm64-v8a",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "executing cmake @echo off\n\"C:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\cmake\\\\3.22.1\\\\bin\\\\cmake.exe\" ^\n  \"-HC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\src\\\\main\" ^\n  \"-DCMAKE_SYSTEM_NAME\u003dAndroid\" ^\n  \"-DCMAKE_EXPORT_COMPILE_COMMANDS\u003dON\" ^\n  \"-DCMAKE_SYSTEM_VERSION\u003d26\" ^\n  \"-DANDROID_PLATFORM\u003dandroid-26\" ^\n  \"-DANDROID_ABI\u003darm64-v8a\" ^\n  \"-DCMAKE_ANDROID_ARCH_ABI\u003darm64-v8a\" ^\n  \"-DANDROID_NDK\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\ndk\\\\27.2.12479018\" ^\n  \"-DCMAKE_ANDROID_NDK\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\ndk\\\\27.2.12479018\" ^\n  \"-DCMAKE_TOOLCHAIN_FILE\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\ndk\\\\27.2.12479018\\\\build\\\\cmake\\\\android.toolchain.cmake\" ^\n  \"-DCMAKE_MAKE_PROGRAM\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\cmake\\\\3.22.1\\\\bin\\\\ninja.exe\" ^\n  \"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003dC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\605n481p\\\\obj\\\\arm64-v8a\" ^\n  \"-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003dC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\605n481p\\\\obj\\\\arm64-v8a\" ^\n  \"-DCMAKE_BUILD_TYPE\u003dDebug\" ^\n  \"-BC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\.cxx\\\\Debug\\\\605n481p\\\\arm64-v8a\" ^\n  -GNinja ^\n  \"-DANDROID_TOOLCHAIN\u003dclang\" ^\n  \"-DANDROID_STL\u003dc++_shared\"\n",
+    "file_": "C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\src\\main\\CMakeLists.txt",
+    "tag_": "debug|arm64-v8a",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "@echo off\n\"C:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\cmake\\\\3.22.1\\\\bin\\\\cmake.exe\" ^\n  \"-HC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\src\\\\main\" ^\n  \"-DCMAKE_SYSTEM_NAME\u003dAndroid\" ^\n  \"-DCMAKE_EXPORT_COMPILE_COMMANDS\u003dON\" ^\n  \"-DCMAKE_SYSTEM_VERSION\u003d26\" ^\n  \"-DANDROID_PLATFORM\u003dandroid-26\" ^\n  \"-DANDROID_ABI\u003darm64-v8a\" ^\n  \"-DCMAKE_ANDROID_ARCH_ABI\u003darm64-v8a\" ^\n  \"-DANDROID_NDK\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\ndk\\\\27.2.12479018\" ^\n  \"-DCMAKE_ANDROID_NDK\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\ndk\\\\27.2.12479018\" ^\n  \"-DCMAKE_TOOLCHAIN_FILE\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\ndk\\\\27.2.12479018\\\\build\\\\cmake\\\\android.toolchain.cmake\" ^\n  \"-DCMAKE_MAKE_PROGRAM\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\cmake\\\\3.22.1\\\\bin\\\\ninja.exe\" ^\n  \"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003dC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\605n481p\\\\obj\\\\arm64-v8a\" ^\n  \"-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003dC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\605n481p\\\\obj\\\\arm64-v8a\" ^\n  \"-DCMAKE_BUILD_TYPE\u003dDebug\" ^\n  \"-BC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\.cxx\\\\Debug\\\\605n481p\\\\arm64-v8a\" ^\n  -GNinja ^\n  \"-DANDROID_TOOLCHAIN\u003dclang\" ^\n  \"-DANDROID_STL\u003dc++_shared\"\n",
+    "file_": "C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\src\\main\\CMakeLists.txt",
+    "tag_": "debug|arm64-v8a",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "Received process result: 1",
+    "file_": "C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\src\\main\\CMakeLists.txt",
+    "tag_": "debug|arm64-v8a",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  },
+  {
+    "level_": 0,
+    "message_": "JSON generation completed with problem. Exception: com.android.ide.common.process.ProcessException: -- The C compiler identification is Clang 18.0.3\n-- The CXX compiler identification is Clang 18.0.3\n-- Detecting C compiler ABI info\n-- Detecting C compiler ABI info - done\n-- Check for working C compiler: C:/Users/dqdung/AppData/Local/Android/Sdk/ndk/27.2.12479018/toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe - skipped\n-- Detecting C compile features\n-- Detecting C compile features - done\n-- Detecting CXX compiler ABI info\n-- Detecting CXX compiler ABI info - done\n-- Check for working CXX compiler: C:/Users/dqdung/AppData/Local/Android/Sdk/ndk/27.2.12479018/toolchains/llvm/prebuilt/windows-x86_64/bin/clang++.exe - skipped\n-- Detecting CXX compile features\n-- Detecting CXX compile features - done\n-- MNN_SOURCE_ROOT: C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/../../../../../../\n-- All source files in project:\n-- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/a2bs_droid/a2bs_service.cpp\n-- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/a2bs_droid/a2bs_service_jni.cpp\n-- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/common/file_loader.cpp\n-- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/common/file_utils.cpp\n-- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/llm_droid/llm_mnn_jni.cpp\n-- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/jni/jni_utils.cpp\n-- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/jni/nnr_avatar_render.cpp\n-- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/jni/nnr_avatar_render_jni.cpp\n-- Configuring done\n-- Generating done\n\nC++ build system [configure] failed while executing:\n    @echo off\n    \"C:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\cmake\\\\3.22.1\\\\bin\\\\cmake.exe\" ^\n      \"-HC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\src\\\\main\" ^\n      \"-DCMAKE_SYSTEM_NAME\u003dAndroid\" ^\n      \"-DCMAKE_EXPORT_COMPILE_COMMANDS\u003dON\" ^\n      \"-DCMAKE_SYSTEM_VERSION\u003d26\" ^\n      \"-DANDROID_PLATFORM\u003dandroid-26\" ^\n      \"-DANDROID_ABI\u003darm64-v8a\" ^\n      \"-DCMAKE_ANDROID_ARCH_ABI\u003darm64-v8a\" ^\n      \"-DANDROID_NDK\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\ndk\\\\27.2.12479018\" ^\n      \"-DCMAKE_ANDROID_NDK\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\ndk\\\\27.2.12479018\" ^\n      \"-DCMAKE_TOOLCHAIN_FILE\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\ndk\\\\27.2.12479018\\\\build\\\\cmake\\\\android.toolchain.cmake\" ^\n      \"-DCMAKE_MAKE_PROGRAM\u003dC:\\\\Users\\\\dqdung\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\cmake\\\\3.22.1\\\\bin\\\\ninja.exe\" ^\n      \"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003dC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\605n481p\\\\obj\\\\arm64-v8a\" ^\n      \"-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003dC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\build\\\\intermediates\\\\cxx\\\\Debug\\\\605n481p\\\\obj\\\\arm64-v8a\" ^\n      \"-DCMAKE_BUILD_TYPE\u003dDebug\" ^\n      \"-BC:\\\\Users\\\\dqdung\\\\Chatbot-Avatar3D-android\\\\app\\\\.cxx\\\\Debug\\\\605n481p\\\\arm64-v8a\" ^\n      -GNinja ^\n      \"-DANDROID_TOOLCHAIN\u003dclang\" ^\n      \"-DANDROID_STL\u003dc++_shared\"\n  from C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\nCMake Error in CMakeLists.txt:\n  Imported target \"MNN\" includes non-existent path\n\n    \"C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/../../../../../..//include\"\n\n  in its INTERFACE_INCLUDE_DIRECTORIES.  Possible reasons include:\n\n  * The path was deleted, renamed, or moved to another location.\n\n  * An install or uninstall procedure did not complete successfully.\n\n  * The installation package was faulty and references files it does not\n  provide.\n\n\n\nCMake Error in cpp/a2bs/CMakeLists.txt:\n  Imported target \"MNN\" includes non-existent path\n\n    \"C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/../../../../../..//include\"\n\n  in its INTERFACE_INCLUDE_DIRECTORIES.  Possible reasons include:\n\n  * The path was deleted, renamed, or moved to another location.\n\n  * An install or uninstall procedure did not complete successfully.\n\n  * The installation package was faulty and references files it does not\n  provide.\n\n\n\nCMake Generate step failed.  Build files cannot be regenerated correctly.",
+    "file_": "C:\\Users\\dqdung\\Chatbot-Avatar3D-android\\app\\src\\main\\CMakeLists.txt",
+    "tag_": "debug|arm64-v8a",
+    "diagnosticCode_": 0,
+    "memoizedIsInitialized": 1,
+    "unknownFields": {
+      "fields": {}
+    },
+    "memoizedSize": -1,
+    "memoizedHashCode": 0
+  }
+]
