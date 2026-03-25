@@ -22,11 +22,7 @@ class DownloadModule(private val context: Activity) {
     private val reposToDownload = listOf(
         "ModelScope/MNN/Qwen2.5-1.5B-Instruct-MNN",
         "ModelScope/MNN/UniTalker-MNN",
-        "ModelScope/MNN/bert-vits2-MNN",
-        "ModelScope/MNN/TaoAvatar-NNR-MNN",
-        "ModelScope/MNN/sherpa-mnn-streaming-zipformer-bilingual-zh-en-2023-02-20",
-        "ModelScope/MNN/sherpa-mnn-streaming-zipformer-en-2023-02-21",
-        "ModelScope/MNN/supertonic-tts-mnn"
+        "ModelScope/MNN/TaoAvatar-NNR-MNN"
     )
 
     private val finishedSet = Collections.synchronizedSet(mutableSetOf<String>())
