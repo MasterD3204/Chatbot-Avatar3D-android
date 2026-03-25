@@ -42,10 +42,9 @@ set(lib_path ${CMAKE_CURRENT_SOURCE_DIR}/libs)
 add_library(MNN
         SHARED
         IMPORTED)
-set(MNN_SOURCE_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../../../../../)
-message(STATUS "MNN_SOURCE_ROOT: ${MNN_SOURCE_ROOT}")
+set(MNN_INCLUDE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/libs/MNN/include)
 set_target_properties(MNN PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
-        "${MNN_SOURCE_ROOT}/include;${MNN_SOURCE_ROOT}/tools/audio/include/;${MNN_SOURCE_ROOT}/transformers/llm/engine/include"
+        "${MNN_INCLUDE_ROOT};${MNN_INCLUDE_ROOT}/audio;${MNN_INCLUDE_ROOT}/llm"
 )
 set_target_properties(MNN
         PROPERTIES IMPORTED_LOCATION
