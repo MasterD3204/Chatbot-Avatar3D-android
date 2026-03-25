@@ -268,7 +268,7 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
         Log.d(TAG, "playText: $text id: $id isEnd: $is_last")
         val audioBlendShape = AudioBlendShape(
             id, is_last, text,
-            ShortArray(0), null, AudioToBlendShapeData()
+            ShortArray(0), AudioToBlendShapeData()
         )
         sessionScope?.launch {
             val processTtsStartTime = System.currentTimeMillis()
