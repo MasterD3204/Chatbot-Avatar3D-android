@@ -18,4 +18,4 @@ dependencyResolutionManagement {
 rootProject.name = "TaoAvatar"
 include ':app'
 include ':model_downloader'
-project(':model_downloader').projectDir = new File('../../frameworks/model_downloader/android')
+project(':model_downloader').projectDir = new File('model_downloader')
