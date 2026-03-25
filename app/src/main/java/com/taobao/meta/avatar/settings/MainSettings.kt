@@ -9,9 +9,8 @@ import com.taobao.meta.avatar.R
 
 
 object MainSettings {
-    private const val KEY_TTS_SPEAKER_ID = "tts_speaker_id"
-    private const val KEY_TTS_SPEED = "tts_speed"
-    private const val DEFAULT_SPEAKER_ID = "F1"
+
+    private const val KEY_LLM_MODEL_PATH = "llm_model_path"
 
     fun getLlmPrompt(context: Context): String {
         val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
@@ -27,32 +26,23 @@ object MainSettings {
         val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
         return sharedPreferences.getBoolean("show_debug_info", true)
     }
-    
-    // TTS Speaker ID
-    fun getTtsSpeakerId(context: Context): String {
-        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
-        return sharedPreferences.getString(KEY_TTS_SPEAKER_ID, DEFAULT_SPEAKER_ID) 
-               ?: DEFAULT_SPEAKER_ID
-    }
-    
-    fun setTtsSpeakerId(context: Context, speakerId: String) {
+
+    /**
+     * Returns the previously saved LLM model directory path, or null if not set.
+     * The path is auto-populated when a model is found in Downloads.
+     */
+    fun getLlmModelPath(context: Context): String? =
+        PreferenceManager.getDefaultSharedPreferences(context)
+            .getString(KEY_LLM_MODEL_PATH, null)
+            ?.takeIf { it.isNotBlank() }
+
+    /**
+     * Persist the LLM model directory path so it survives app restarts.
+     */
+    fun setLlmModelPath(context: Context, path: String) {
         PreferenceManager.getDefaultSharedPreferences(context)
             .edit()
-            .putString(KEY_TTS_SPEAKER_ID, speakerId)
-            .apply()
-    }
-    
-    // TTS Speed (范围 0.5 - 2.0，存储时放大10倍为整数 5-20)
-    fun getTtsSpeed(context: Context): Float {
-        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
-        val speedInt = sharedPreferences.getInt(KEY_TTS_SPEED, 10)
-        return speedInt / 10.0f
-    }
-    
-    fun setTtsSpeed(context: Context, speedInt: Int) {
-        PreferenceManager.getDefaultSharedPreferences(context)
-            .edit()
-            .putInt(KEY_TTS_SPEED, speedInt)
+            .putString(KEY_LLM_MODEL_PATH, path)
             .apply()
     }
 }

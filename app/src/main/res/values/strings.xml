@@ -28,7 +28,7 @@
     <string name="downloading">Downloading…</string>
     <string name="download_error">Press to Retry</string>
     <string name="download_prepareing">Download Preparing</string>
-    <string name="debug_model_size">Local LLM Model: Qwen2.5–1.5B\nModel Size:%1$s\nTTS Model Size:%2$s\nA2BS Model Size:%3$s\nASR Model Size:%4$s\nNNR Model Size:%5$s\n"</string>
+    <string name="debug_model_size">LLM Size:%1$s\nA2BS Size:%2$s\nNNR Size:%3$s</string>
     <string name="show_debug_info">Show Debug Info</string>
     <string name="check_for_update_summary" />
     <string name="inference_by_mnn">Inference Local by MNN</string>

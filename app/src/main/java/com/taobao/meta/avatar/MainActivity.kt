@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
+import android.os.Environment
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
@@ -17,7 +18,7 @@ import com.alibaba.mls.api.ApplicationProvider
 import com.taobao.meta.avatar.MHConfig.A2BS_MODEL_DIR
 import com.taobao.meta.avatar.a2bs.A2BSService
 import com.taobao.meta.avatar.a2bs.AudioBlendShapePlayer
-import com.taobao.meta.avatar.asr.RecognizeService
+import com.taobao.meta.avatar.asr.AndroidSttService
 import com.taobao.meta.avatar.debug.DebugModule
 import com.taobao.meta.avatar.download.DownloadCallback
 import com.taobao.meta.avatar.download.DownloadModule
@@ -27,15 +28,18 @@ import com.taobao.meta.avatar.nnr.AvatarTextureView
 import com.taobao.meta.avatar.nnr.NnrAvatarRender
 import com.taobao.meta.avatar.record.RecordPermission
 import com.taobao.meta.avatar.record.RecordPermission.REQUEST_RECORD_AUDIO_PERMISSION
-import com.taobao.meta.avatar.tts.TtsService
+import com.taobao.meta.avatar.settings.MainSettings
+import com.taobao.meta.avatar.tts.PiperTtsEngine
 import com.taobao.meta.avatar.utils.MemoryMonitor
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.system.exitProcess
 
@@ -53,18 +57,18 @@ class MainActivity : AppCompatActivity(),
     private var a2bsService: A2BSService? = null
     private lateinit var llmService: LlmService
     private lateinit var llmPresenter: LlmPresenter
-    private var ttsService: TtsService? = null
+    private lateinit var piperTtsEngine: PiperTtsEngine
     private var memoryMonitor: MemoryMonitor? = null
     private var audioBendShapePlayer: AudioBlendShapePlayer? = null
-    private lateinit var nnrAvatarRender:NnrAvatarRender
-    private lateinit var recognizeService: RecognizeService
+    private lateinit var nnrAvatarRender: NnrAvatarRender
+    private lateinit var sttService: AndroidSttService
     private var callingSessionId = System.currentTimeMillis()
     private var serviceInitializing = false
     private var answerSession = System.currentTimeMillis()
     private val initComplete = CompletableDeferred<Boolean>()
     private var chatStatus = ChatStatus.STATUS_IDLE
     private var chatSessionJobs = mutableSetOf<Job>()
-    lateinit var mainView:MainView
+    lateinit var mainView: MainView
     private lateinit var downloadManager: DownloadModule
 
     @SuppressLint("UseCompatLoadingForDrawables")
@@ -81,13 +85,13 @@ class MainActivity : AppCompatActivity(),
         avatarTextureView = findViewById(R.id.surface_view)
         avatarTextureView.setPlaceHolderView(findViewById(R.id.img_place_holder))
         a2bsService = A2BSService()
-        ttsService = TtsService()
+        piperTtsEngine = PiperTtsEngine(this)
         llmPresenter = LlmPresenter(mainView.textResponse)
         llmService = LlmService()
         nnrAvatarRender = NnrAvatarRender(avatarTextureView, MHConfig.NNR_MODEL_DIR)
         val debugModule = DebugModule()
         debugModule.setupDebug(this)
-        recognizeService = RecognizeService(this)
+        sttService = AndroidSttService(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (downloadManager.isDownloadComplete() && !DebugModule.DEBUG_DISABLE_SERVICE_AUTO_START) {
             lifecycleScope.launch {
@@ -107,9 +111,7 @@ class MainActivity : AppCompatActivity(),
 
     private fun cancelAllJobs() {
         chatSessionJobs.apply {
-            forEach {
-                it.cancel()
-            }
+            forEach { it.cancel() }
             clear()
         }
     }
@@ -201,43 +203,43 @@ class MainActivity : AppCompatActivity(),
     }
 
     private suspend fun setupServices() {
-        if (initComplete.isCompleted) {
-            return
-        }
+        if (initComplete.isCompleted) return
         if (serviceInitializing) {
             initComplete.await()
         }
         serviceInitializing = true
         lifecycleScope.async {
             val taskA2BS = async {
-                val startTimeA2BS = System.currentTimeMillis()
+                val t = System.currentTimeMillis()
                 loadA2BSModel()
-                Log.i(TAG, "Task A2BS completed in ${System.currentTimeMillis() - startTimeA2BS} ms")
+                Log.i(TAG, "Task A2BS completed in ${System.currentTimeMillis() - t} ms")
             }
             val taskTTS = async {
                 Log.i(TAG, "Task TTS init begin")
-                val startTimeTTS = System.currentTimeMillis()
+                val t = System.currentTimeMillis()
                 loadTTSModel()
-                Log.i(TAG, "Task TTS completed in ${System.currentTimeMillis() - startTimeTTS} ms")
+                Log.i(TAG, "Task TTS completed in ${System.currentTimeMillis() - t} ms")
             }
             val taskNNR = async {
-                val startTimeNNR = System.currentTimeMillis()
+                val t = System.currentTimeMillis()
                 loadNNRModel()
-                Log.i(TAG, "Task NNR completed in ${System.currentTimeMillis() - startTimeNNR} ms")
+                Log.i(TAG, "Task NNR completed in ${System.currentTimeMillis() - t} ms")
             }
             val taskLLM = async {
-                val startTimeLLM = System.currentTimeMillis()
+                val t = System.currentTimeMillis()
                 loadLLMModel()
-                Log.i(TAG, "Task LLM completed in ${System.currentTimeMillis() - startTimeLLM} ms")
+                Log.i(TAG, "Task LLM completed in ${System.currentTimeMillis() - t} ms")
             }
-            val taskRecognize = async {
-                val startTimeLLM = System.currentTimeMillis()
-                setupRecognizeService()
-                Log.i(TAG, "Task Recognize completed in ${System.currentTimeMillis() - startTimeLLM} ms")
+            val taskStt = async {
+                val t = System.currentTimeMillis()
+                setupSttService()
+                Log.i(TAG, "Task STT completed in ${System.currentTimeMillis() - t} ms")
             }
-            awaitAll(taskA2BS, taskTTS, taskNNR, taskLLM, taskRecognize)
+            awaitAll(taskA2BS, taskTTS, taskNNR, taskLLM, taskStt)
             Log.i(TAG, "All services have been initialized")
-            recognizeService.onRecognizeText = { text ->
+
+            // Wire up STT → processAsrText
+            sttService.onRecognizeText = { text ->
                 if (chatStatus == ChatStatus.STATUS_CALLING) {
                     stopRecord()
                     lifecycleScope.launch {
@@ -251,12 +253,10 @@ class MainActivity : AppCompatActivity(),
         serviceInitializing = false
     }
 
-    fun serviceInitialized():Boolean {
-        return initComplete.isCompleted
-    }
+    fun serviceInitialized(): Boolean = initComplete.isCompleted
 
-    private fun processAsrText(text:String) {
-        answerSession++;
+    private fun processAsrText(text: String) {
+        answerSession++
         Log.d(TAG, "onRecognizeText: $text sessionId: $answerSession")
         lifecycleScope.launch {
             llmPresenter.onUserTextUpdate(text)
@@ -277,13 +277,11 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
-    fun getAudioBlendShapePlayer():AudioBlendShapePlayer? {
-        return audioBendShapePlayer
-    }
+    fun getAudioBlendShapePlayer(): AudioBlendShapePlayer? = audioBendShapePlayer
 
     private fun createAudioBlendShapePlayer() {
         audioBendShapePlayer = AudioBlendShapePlayer(nnrAvatarRender, this@MainActivity)
-        audioBendShapePlayer!!.addListener(object: AudioBlendShapePlayer.Listener{
+        audioBendShapePlayer!!.addListener(object : AudioBlendShapePlayer.Listener {
             override fun onPlayStart() {
                 stopRecord()
             }
@@ -296,13 +294,13 @@ class MainActivity : AppCompatActivity(),
         })
     }
 
-    private suspend fun setupRecognizeService() {
-        recognizeService.initRecognizer()
+    private suspend fun setupSttService() {
+        sttService.initRecognizer()
     }
 
-    fun getA2bsService(): A2BSService {
-        return a2bsService!!
-    }
+    fun getA2bsService(): A2BSService = a2bsService!!
+
+    fun getPiperTtsEngine(): PiperTtsEngine = piperTtsEngine
 
     override fun onStart() {
         super.onStart()
@@ -321,6 +319,8 @@ class MainActivity : AppCompatActivity(),
 
     override fun onDestroy() {
         super.onDestroy()
+        sttService.destroy()
+        piperTtsEngine.destroy()
         if (memoryMonitor != null) {
             memoryMonitor!!.stopMonitoring()
         }
@@ -329,14 +329,14 @@ class MainActivity : AppCompatActivity(),
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        Log.d(TAG, "onConfigurationChanged: Configuration has changed. Language updated.")
+        Log.d(TAG, "onConfigurationChanged")
         recreate()
     }
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
-        grantResults: IntArray
+        grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
@@ -355,12 +355,58 @@ class MainActivity : AppCompatActivity(),
         nnrAvatarRender.waitForInitComplete()
     }
 
+    /**
+     * Load LLM model.
+     * Priority: saved path from Settings → scanned from Downloads → fallback MHConfig.LLM_MODEL_DIR
+     */
     private suspend fun loadLLMModel() {
-        llmService.init(MHConfig.LLM_MODEL_DIR)
+        val modelDir = resolveLlmModelDir()
+        Log.i(TAG, "Loading LLM from: $modelDir")
+        llmService.init(modelDir)
+    }
+
+    private suspend fun resolveLlmModelDir(): String = withContext(Dispatchers.IO) {
+        // 1. Use previously saved path if still valid
+        val savedPath = MainSettings.getLlmModelPath(this@MainActivity)
+        if (savedPath != null && File(savedPath, "config.json").exists()) {
+            return@withContext savedPath
+        }
+
+        // 2. Scan /sdcard/Download/ for folders containing config.json
+        val found = scanLlmModelsInDownloads()
+        if (found.isNotEmpty()) {
+            val path = found.first().absolutePath
+            MainSettings.setLlmModelPath(this@MainActivity, path)
+            Log.i(TAG, "Auto-selected LLM model from Downloads: $path")
+            return@withContext path
+        }
+
+        // 3. Fallback to default ModelScope path
+        MHConfig.LLM_MODEL_DIR
+    }
+
+    /**
+     * Scan the public Downloads directory for folders that contain a config.json.
+     * These are treated as valid MNN LLM model directories.
+     */
+    fun scanLlmModelsInDownloads(): List<File> {
+        val downloadDir = Environment.getExternalStoragePublicDirectory(
+            Environment.DIRECTORY_DOWNLOADS)
+        return try {
+            downloadDir.listFiles()
+                ?.filter { it.isDirectory && File(it, "config.json").exists() }
+                ?.sortedByDescending { it.lastModified() }
+                ?: emptyList()
+        } catch (e: Exception) {
+            Log.e(TAG, "scanLlmModelsInDownloads failed", e)
+            emptyList()
+        }
     }
 
     private suspend fun loadTTSModel() {
-        ttsService!!.init(MHConfig.TTS_MODEL_DIR, context = this)
+        withContext(Dispatchers.IO) {
+            piperTtsEngine.init()
+        }
     }
 
     private suspend fun loadA2BSModel() {
@@ -368,28 +414,24 @@ class MainActivity : AppCompatActivity(),
         createAudioBlendShapePlayer()
     }
 
-    fun getTtsService(): TtsService {
-        return ttsService!!
-    }
-
     fun stopRecord() {
-        recognizeService.stopRecord()
+        sttService.stopRecord()
     }
 
     fun startRecord() {
         mainView.textStatus.text = getString(R.string.listening)
-        recognizeService.startRecord()
+        sttService.startRecord()
     }
 
-    fun getNnrRuntime(): NnrAvatarRender {
-        return nnrAvatarRender
-    }
+    fun getNnrRuntime(): NnrAvatarRender = nnrAvatarRender
 
     override fun onDownloadStart() {
         Log.d(TAG, "Download started")
     }
 
-    override fun onDownloadProgress(progress: Double, currentBytes: Long, totalBytes: Long, speedInfo:String) {
+    override fun onDownloadProgress(
+        progress: Double, currentBytes: Long, totalBytes: Long, speedInfo: String,
+    ) {
         lifecycleScope.launch {
             mainView.updateDownloadProgress(currentBytes, totalBytes, speedInfo)
         }
@@ -407,7 +449,7 @@ class MainActivity : AppCompatActivity(),
         Log.e(TAG, "Download error", error)
         mainView.onDownloadError(error)
     }
-    
+
     companion object {
         private const val TAG = "MainActivity"
         init {

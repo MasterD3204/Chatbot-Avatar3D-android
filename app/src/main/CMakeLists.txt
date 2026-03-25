@@ -8,25 +8,17 @@ set(CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpp)
 set(JNI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/jni)
 set (THIRD_PARTY_INCLUDES_DIR ${CMAKE_CURRENT_LIST_DIR}/cpp/third_party/)
 set (A2BS_DROID_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpp/a2bs_droid)
-set (TTS_DROID_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpp/tts_droid)
 set (LLM_DROID_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpp/llm_droid)
-set (ASR_JNI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpp/asr_jni)
-option(DEBUG_TTS_PIPE "tts use pipe" OFF)
 
 include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CPP_DIR}/3rd_party
     ${CPP_DIR}/3rd_party/glm
-#    ${CPP_DIR}/llm/include
-    ${CPP_DIR}/tts/include
-#    ${CPP_DIR}/tts_pipe/include
     ${CPP_DIR}/audio2bs/include
     ${CPP_DIR}
     ${JNI_DIR}
     ${PROJECT_INCLUDE_DIR}
     ${A2BS_DROID_DIR}
-    ${COMMON_DIR}
-    ${TTS_DROID_DIR})
-#    ${ASR_JNI_DIR})
+    ${COMMON_DIR})
 
 
 FILE(GLOB A2BS_DROID_SRC
@@ -36,16 +28,10 @@ FILE(GLOB CPP_SRCS
         ${CPP_DIR}/*.cpp
         ${COMMON_DIR}/*.cpp
         ${A2BS_DROID_SRC}
-        ${TTS_DROID_DIR}/*.cpp
         ${LLM_DROID_DIR}/*.cpp)
-#)
 
 FILE(GLOB JNI_SRCS
         ${JNI_DIR}/*.cpp)
-
-#add_subdirectory(${CPP_DIR}/audio2bs ${CMAKE_BINARY_DIR}/audio2bs)
-#add_subdirectory(${CPP_DIR}/tts ${CMAKE_BINARY_DIR}/tts)
-#add_subdirectory(${CPP_DIR}/llm ${CMAKE_BINARY_DIR}/llm)
 
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall \
@@ -81,14 +67,6 @@ list(APPEND MNN_LIBRARIES
 )
 
 add_subdirectory(cpp/a2bs)
-#add_subdirectory(cpp/a2bs_new)
-if (DEBUG_TTS_PIPE)
-    add_subdirectory(cpp/tts_pipe)
-#    add_subdirectory(cpp/tts_pipe/third_party/espeak-ng)
-else ()
-    add_subdirectory(cpp/tts)
-endif ()
-#add_subdirectory(cpp/asr)
 
 
 add_library(${CMAKE_PROJECT_NAME} SHARED ${CPP_SRCS} ${JNI_SRCS}
@@ -109,5 +87,4 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     MNN
     nnrruntime
     mnn_a2bs
-    mnn_tts_SDK
     )

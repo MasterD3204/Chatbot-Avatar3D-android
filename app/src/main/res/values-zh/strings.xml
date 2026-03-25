@@ -28,7 +28,7 @@
     <string name="downloading">下载中…</string>
     <string name="download_error">点击重试</string>
     <string name="download_prepareing">下载准备中</string>
-    <string name="debug_model_size">本地大模型: Qwen2.5–1.5B\n模型大小:%1$s\nTTS 大小:%2$s\na2bs大小:%3$s\nASR大小:%4$s\nNNR大小:%5$s\n"</string>
+    <string name="debug_model_size">LLM大小:%1$s\nA2BS大小:%2$s\nNNR大小:%3$s</string>
     <string name="show_debug_info">显示 Debug 信息</string>
     <string name="check_for_update_summary" />
     <string name="inference_by_mnn">由MNN提供本地推理服务</string>

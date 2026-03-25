@@ -2,7 +2,7 @@
 // Copyright (c) 2024 Alibaba Group Holding Limited All rights reserved.
 
 package com.taobao.meta.avatar.a2bs
-import android.bluetooth.BluetoothClass.Device
+
 import android.util.Log
 import com.alibaba.mnnllm.android.utils.LogUtils
 import com.taobao.meta.avatar.MHConfig
@@ -10,8 +10,7 @@ import com.taobao.meta.avatar.debug.DebugModule
 import com.taobao.meta.avatar.MainActivity
 import com.taobao.meta.avatar.audio.AudioChunksPlayer
 import com.taobao.meta.avatar.nnr.NnrAvatarRender
-import com.taobao.meta.avatar.tts.TtsService
-import com.taobao.meta.avatar.utils.DeviceUtils
+import com.taobao.meta.avatar.tts.PiperTtsEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,20 +34,24 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
         const val TAG = "AudioBlendShapePlayer"
         const val DEBUG_VERBOSE = false
     }
-    private var audioChunksPlayer:AudioChunksPlayer? = null
+
+    private var audioChunksPlayer: AudioChunksPlayer? = null
     private val audioBlendShapeMap: MutableMap<Int, AudioBlendShape> = mutableMapOf()
-    private var nextIndex= 0
+    private var nextIndex = 0
     @Volatile
     private var stopped = false
     private val listeners: MutableList<Listener> = mutableListOf()
     private var nextSegmentId = 0
     private var nextSegmentText = ""
     private var segmentTokenCount = 0
-    private var sessionJob:Job? = null
+    private var sessionJob: Job? = null
     private var sessionScope: CoroutineScope? = null
-    private val ttsService:TtsService = activity.getTtsService()
+
+    // TTS engine — Piper via Sherpa-ONNX
+    private val piperTtsEngine: PiperTtsEngine = activity.getPiperTtsEngine()
     private val a2bsService: A2BSService = activity.getA2bsService()
-    //key: segementId, value: start audio size of the segment
+
+    // key: segmentId → start audio size of the segment
     private val audioMarkerMap = Collections.synchronizedMap(mutableMapOf(0 to 0))
     private val audioMarkerMapReverse = Collections.synchronizedMap(mutableMapOf(0 to 0))
     private val markerCompleteTime = Collections.synchronizedMap(mutableMapOf<Int, Long>())
@@ -58,7 +61,8 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
     private val waitingSmoothReadyMap = Collections.synchronizedMap(mutableMapOf<Int, suspend () -> Unit>())
     private val smoothReadyMap = Collections.synchronizedMap(mutableMapOf<Int, Long>())
     private val readyTimeMap = Collections.synchronizedMap(mutableMapOf<Int, Long>())
-    //200ms smooth time
+
+    // 200ms smooth time
     private val CONFIG_SMOOTH_DURATION = 200
     private val CONFIG_CHAT_SMOOTH_DURATION = 100
     private val CONFIG_NEED_SMOOTH_TO_CHAT = false
@@ -102,9 +106,7 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
         audioChunksPlayer = AudioChunksPlayer()
         sessionJob = Job()
         val executor = ThreadPoolExecutor(configThreadNum, 10, 2L, TimeUnit.SECONDS, LinkedBlockingQueue())
-            .apply {
-                this.allowCoreThreadTimeOut(true)
-            }
+            .apply { this.allowCoreThreadTimeOut(true) }
         sessionScope = CoroutineScope(executor.asCoroutineDispatcher() + SupervisorJob(sessionJob))
         MainScope().launch {
             processAudioBlendShapes()
@@ -133,31 +135,31 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
         }
     }
 
-    private fun markSegmentCompleteTime(markerSize: Int):Long {
+    private fun markSegmentCompleteTime(markerSize: Int): Long {
         val result = markerCompleteTime[markerSize]!!
         playingStatus.nextPlaySegmentId = audioMarkerMapReverse[markerSize]!!
         return result
     }
 
-    private suspend fun waitAudioComplete(markerSize: Int):Long {
-      return if (markerCompleteTime.containsKey(markerSize)) {
-          markSegmentCompleteTime(markerSize)
-      } else {
-          suspendCancellableCoroutine { continuation ->
-              waitingAudioCompleteMap[markerSize] = {
-                  if (continuation.isActive) {
-                      val result = markSegmentCompleteTime(markerSize)
-                      continuation.resume(result)
-                  }
-              }
-              continuation.invokeOnCancellation {
-                  waitingAudioCompleteMap.remove(markerSize)
-              }
-          }
-      }
+    private suspend fun waitAudioComplete(markerSize: Int): Long {
+        return if (markerCompleteTime.containsKey(markerSize)) {
+            markSegmentCompleteTime(markerSize)
+        } else {
+            suspendCancellableCoroutine { continuation ->
+                waitingAudioCompleteMap[markerSize] = {
+                    if (continuation.isActive) {
+                        val result = markSegmentCompleteTime(markerSize)
+                        continuation.resume(result)
+                    }
+                }
+                continuation.invokeOnCancellation {
+                    waitingAudioCompleteMap.remove(markerSize)
+                }
+            }
+        }
     }
 
-    private suspend fun waitSmoothReady(segmentId: Int):Long {
+    private suspend fun waitSmoothReady(segmentId: Int): Long {
         return if (segmentId == 0) {
             0
         } else if (smoothReadyMap.containsKey(segmentId)) {
@@ -178,15 +180,10 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
         }
     }
 
-    suspend fun getFirstAudioBlendShape(): AudioBlendShape {
-        val nextAbs = getNextAudioBlendShape()
-        return nextAbs
-    }
+    suspend fun getFirstAudioBlendShape(): AudioBlendShape = getNextAudioBlendShape()
 
     private suspend fun processAudioBlendShapes() {
-        if (DebugModule.DEBUG_DISABLE_A2BS) {
-            return
-        }
+        if (DebugModule.DEBUG_DISABLE_A2BS) return
         try {
             while (!stopped) {
                 val nextAbs = getNextAudioBlendShape()
@@ -254,70 +251,61 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
         }
         val delimiters = "[.,!。，！？?\n、：；:]"
         if (currentText.contains(delimiters.toRegex())) {
-            Log.d(TAG, "is delimeter")
+            Log.d(TAG, "is delimiter")
             if (nextSegmentText.isNotEmpty() && segmentTokenCount >= 3) {
                 playText(nextSegmentText, nextSegmentId++, false)
                 nextSegmentText = ""
                 segmentTokenCount = 0
             }
         } else {
-            Log.d(TAG, "is not delimeter")
+            Log.d(TAG, "is not delimiter")
             nextSegmentText += currentText
             segmentTokenCount += 1
         }
     }
 
-    fun playText(text:String, id: Int, is_last:Boolean) {
-        if (DebugModule.DEBUG_DISABLE_A2BS) {
-            sessionScope?.launch {
-                withContext(Dispatchers.Default) {
-                    ttsService.processSherpa(text, id)
-                }
-            }
-            Log.d(TAG, "stop..")
-            return
-        }
-
-        Log.d(TAG, "playText: ${text} id: ${id} isEnd:${is_last}")
+    fun playText(text: String, id: Int, is_last: Boolean) {
+        Log.d(TAG, "playText: $text id: $id isEnd: $is_last")
         val audioBlendShape = AudioBlendShape(
-            id,
-            is_last,
-            text,
-            ShortArray(0),
-            null,
-            AudioToBlendShapeData())
+            id, is_last, text,
+            ShortArray(0), null, AudioToBlendShapeData()
+        )
         sessionScope?.launch {
             val processTtsStartTime = System.currentTimeMillis()
-            Log.d(TAG, "processTextInner TTS begin $id $text begin")
+            Log.d(TAG, "processTextInner TTS begin $id $text")
             ensureActive()
-            ttsService.setCurrentIndex(audioBlendShape.id)
-            var audioData = ShortArray(0)
-            if (ttsService.useSherpaTts) {
-                val generatedAudio = ttsService.processSherpa(audioBlendShape.text, audioBlendShape.id)
-                if (generatedAudio != null) {
-                    audioChunksPlayer?.sampleRate = generatedAudio.sampleRate
-                    audioData = audioChunksPlayer?.convertToShortArray(generatedAudio.samples)!!
-                }
-            } else {
-                // Read sample rate dynamically from the loaded TTS model
-                // Piper Vietnamese = 22050 Hz, BertVits2 Chinese = 44100 Hz, Supertonic English = 24000 Hz
-                audioChunksPlayer?.sampleRate = ttsService.getSampleRate()
-                audioData = ttsService.process(audioBlendShape.text, audioBlendShape.id)
-            }
-            if (audioData.isEmpty()) {
-                lastId = id -1
-                Log.d(TAG, "processTextInner: $id $text audioData is empty")
+
+            // ── Piper TTS synthesis ──────────────────────────────────────────
+            val (samples, sampleRate) = piperTtsEngine.generate(audioBlendShape.text)
+
+            if (samples.isEmpty() || sampleRate <= 0) {
+                lastId = id - 1
+                Log.d(TAG, "processTextInner: $id empty audio, skipping")
                 return@launch
             }
+
+            // Convert float32 [-1,1] → int16
+            val audioData = ShortArray(samples.size) { i ->
+                (samples[i].coerceIn(-1f, 1f) * 32767f).toInt().toShort()
+            }
+
+            audioChunksPlayer?.sampleRate = sampleRate
             audioBlendShape.audio = audioData
+            // ────────────────────────────────────────────────────────────────
+
             ensureActive()
             val processTtsEndTime = System.currentTimeMillis()
             val processTtsDuration = processTtsEndTime - processTtsStartTime
-            val rtf = processTtsDuration.toFloat()/ 1000 / (audioData.size / audioChunksPlayer!!.sampleRate.toFloat())
-            Log.d(TAG, "processTextInner TTS  $id $text end duration: $processTtsDuration rtf: $rtf")
-            val a2bsData = a2bsService.process(audioBlendShape.id, audioData, audioChunksPlayer?.sampleRate!!)
-            Log.d(TAG, "processTextInner A2BS  $id  end duration: ${System.currentTimeMillis() - processTtsEndTime}")
+            val rtf = processTtsDuration.toFloat() / 1000f /
+                      (audioData.size.toFloat() / sampleRate.toFloat())
+            Log.d(TAG, "processTextInner TTS $id end duration: ${processTtsDuration}ms rtf: $rtf")
+
+            // ── A2BS processing ──────────────────────────────────────────────
+            val a2bsData = a2bsService.process(audioBlendShape.id, audioData, sampleRate)
+            Log.d(TAG, "processTextInner A2BS $id end duration: ${System.currentTimeMillis() - processTtsEndTime}ms")
             audioBlendShape.a2bs = a2bsData
+            // ────────────────────────────────────────────────────────────────
+
             ensureActive()
             Log.d(TAG, "processTextInner: $id $text end")
             addAudioBlendShape(audioBlendShape)
@@ -328,50 +316,38 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
     private suspend fun addAudioBlendShape(audioBlendShape: AudioBlendShape) {
         totalAudioBsFrame += audioBlendShape.a2bs.frame_num
         Log.d(TAG, "AddBlendShape: ${audioBlendShape.id} " +
-                "totalAudioBsFrame: ${totalAudioBsFrame} " +
-                "text: ${audioBlendShape.text} " +
-                "a2bs size: ${audioBlendShape.a2bs.frame_num} " +
-                "audio size: ${audioBlendShape.audio.size}" +
-                "per_frame: ${if(audioBlendShape.a2bs.frame_num > 0)
-                    audioBlendShape.audio.size / audioBlendShape.a2bs.frame_num else
-                    0}")
+            "totalAudioBsFrame: $totalAudioBsFrame " +
+            "text: ${audioBlendShape.text} " +
+            "a2bs size: ${audioBlendShape.a2bs.frame_num} " +
+            "audio size: ${audioBlendShape.audio.size}" +
+            "per_frame: ${if (audioBlendShape.a2bs.frame_num > 0)
+                audioBlendShape.audio.size / audioBlendShape.a2bs.frame_num else 0}")
         audioBlendShapeMap[audioBlendShape.id] = audioBlendShape
         waitingBlendShapeMap[audioBlendShape.id]?.invoke()
         waitingBlendShapeMap.remove(audioBlendShape.id)
     }
 
-    val currentTime: Long
+    val currentTime: Long get() = audioChunksPlayer?.currentTime() ?: 0L
+    val totalTime: Long get() = audioChunksPlayer?.totalTime() ?: 0L
+    val isPlaying: Boolean get() = audioChunksPlayer?.isPlaying ?: false && !stopped
+    val currentHeadPosition: Int get() = audioChunksPlayer?.currentHeadPosition() ?: 0
+
+    val currentPlayingText: String
         get() {
-            return audioChunksPlayer?.currentTime()?:0L
-        }
-
-    val totalTime: Long
-        get() = audioChunksPlayer?.totalTime()?:0L
-
-    val isPlaying: Boolean
-        get() = audioChunksPlayer?.isPlaying?:false && !stopped
-
-    val currentHeadPosition:Int
-        get() = audioChunksPlayer?.currentHeadPosition()?:0
-
-    val currentPlayingText:String
-        get() {
-            if (!isPlaying) {
-                return ""
-            }
-            val currentPosition = audioChunksPlayer?.currentHeadPosition()?:0
+            if (!isPlaying) return ""
+            val currentPosition = audioChunksPlayer?.currentHeadPosition() ?: 0
             for (i in audioMarkerMap.keys) {
-                if (audioMarkerMap[i]!! <= currentPosition && audioMarkerMap.containsKey(i + 1) && currentPosition <= audioMarkerMap[i + 1]!!) {
+                if (audioMarkerMap[i]!! <= currentPosition &&
+                    audioMarkerMap.containsKey(i + 1) &&
+                    currentPosition <= audioMarkerMap[i + 1]!!) {
                     return audioBlendShapeMap[i]?.text ?: ""
                 }
             }
             return ""
         }
 
-    val isBuffering:Boolean
-        get() {
-            return audioMarkerMapReverse.containsKey(audioChunksPlayer?.currentHeadPosition())
-        }
+    val isBuffering: Boolean
+        get() = audioMarkerMapReverse.containsKey(audioChunksPlayer?.currentHeadPosition())
 
     fun stop() {
         stopped = true
@@ -389,9 +365,7 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
         waitingAudioCompleteMap.clear()
         waitingBlendShapeMap.clear()
         waitingSmoothReadyMap.clear()
-        listeners.forEach{
-            it.onPlayEnd()
-        }
+        listeners.forEach { it.onPlayEnd() }
     }
 
     fun playSession(sessionId: Long, texts: List<String>) {
@@ -402,56 +376,49 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
     }
 
     fun update(): PlayingStatus {
-        if (DebugModule.DEBUG_DISABLE_A2BS) {
-            return playingStatus
-        }
-        if (stopped) {
-            return playingStatus
-        }
+        if (DebugModule.DEBUG_DISABLE_A2BS) return playingStatus
+        if (stopped) return playingStatus
+
         val currentHeadPosition = currentHeadPosition
         playingStatus.currentAudioPosition = currentHeadPosition
         playingStatus.isBuffering = audioMarkerMapReverse.containsKey(currentHeadPosition)
         val now = System.currentTimeMillis()
+
         LogUtils.v(TAG, "update: ${playingStatus.currentAudioPosition} " +
-                "nextPlaySegmentId: ${playingStatus.nextPlaySegmentId} " +
-                "isBuffering: ${playingStatus.isBuffering} " +
-                "markerCompleteTime: $markerCompleteTime" +
-                "currentHeadPosition : ${currentHeadPosition}" +
-                "audioMarkerMapReverse: ${audioMarkerMapReverse}"
-        )
+            "nextPlaySegmentId: ${playingStatus.nextPlaySegmentId} " +
+            "isBuffering: ${playingStatus.isBuffering} " +
+            "markerCompleteTime: $markerCompleteTime " +
+            "currentHeadPosition: $currentHeadPosition " +
+            "audioMarkerMapReverse: $audioMarkerMapReverse")
+
         if (playingStatus.isBuffering) {
             playingStatus.nextPlaySegmentId = audioMarkerMapReverse[currentHeadPosition]!!
             val nextReady = readyTimeMap.containsKey(playingStatus.nextPlaySegmentId)
             val previousComplete = markerCompleteTime.containsKey(currentHeadPosition) || currentHeadPosition == 0
-            LogUtils.v(TAG, "update previousComplete:${previousComplete}  " +
-                    "percent is : ${playingStatus.smoothToIdlePercent} nextReady:${nextReady} " +
-                    "smoothToTalkStartTime : ${playingStatus.smoothToTalkStartTime} " +
-                    "smoothToTalkStartTime < 0 : ${playingStatus.smoothToTalkStartTime < 0}")
+
             if (previousComplete && playingStatus.smoothToIdlePercent < 1.0f && playingStatus.nextPlaySegmentId > 0) {
                 playingStatus.smoothToTalkPercent = -1f
                 val lastPlayEndTime = markerCompleteTime[playingStatus.currentAudioPosition]!!
-                playingStatus.smoothToIdlePercent = if(now - lastPlayEndTime > CONFIG_SMOOTH_DURATION) {
+                playingStatus.smoothToIdlePercent = if (now - lastPlayEndTime > CONFIG_SMOOTH_DURATION) {
                     1.0f
                 } else {
-                    ((now - lastPlayEndTime).toFloat() / CONFIG_SMOOTH_DURATION)
+                    (now - lastPlayEndTime).toFloat() / CONFIG_SMOOTH_DURATION
                 }
-                LogUtils.v(TAG, "update previousComplete now: $now after  ${now - lastPlayEndTime} percent is : ${playingStatus.smoothToIdlePercent}")
             } else if (nextReady && previousComplete) {
                 if (CONFIG_NEED_SMOOTH_TO_CHAT) {
                     if (playingStatus.smoothToTalkStartTime < 0) {
                         playingStatus.smoothToTalkStartTime = now
-                        Log.v(TAG, "update nextReady after Ready reset smoothToTalkStartTime: ${playingStatus.smoothToTalkStartTime} " +
-                                "smoothToTalkPercent is : ${playingStatus.smoothToTalkPercent}")
                     }
                     val elapsedTime = now - playingStatus.smoothToTalkStartTime
                     playingStatus.smoothToIdlePercent = 1.0f
-                    playingStatus.smoothToTalkPercent = if(elapsedTime >= CONFIG_CHAT_SMOOTH_DURATION) {
+                    playingStatus.smoothToTalkPercent = if (elapsedTime >= CONFIG_CHAT_SMOOTH_DURATION) {
                         1.0f
                     } else {
                         elapsedTime.toFloat() / CONFIG_CHAT_SMOOTH_DURATION
                     }
                 }
-                if ((!CONFIG_NEED_SMOOTH_TO_CHAT || playingStatus.smoothToTalkPercent >= 1.0f) && waitingSmoothReadyMap.containsKey(playingStatus.nextPlaySegmentId)) {
+                if ((!CONFIG_NEED_SMOOTH_TO_CHAT || playingStatus.smoothToTalkPercent >= 1.0f) &&
+                    waitingSmoothReadyMap.containsKey(playingStatus.nextPlaySegmentId)) {
                     smoothReadyMap[playingStatus.nextPlaySegmentId] = now
                     val smoothReadySuspend = waitingSmoothReadyMap[playingStatus.nextPlaySegmentId]
                     waitingSmoothReadyMap.remove(playingStatus.nextPlaySegmentId)
@@ -460,16 +427,8 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
                         smoothReadySuspend?.invoke()
                     }
                 }
-            } else {
-                LogUtils.v(TAG, "update previous not complete")
             }
-            LogUtils.v(TAG, "update end: ${playingStatus.currentAudioPosition} " +
-                    "nextPlaySegmentId: ${playingStatus.nextPlaySegmentId} " +
-                    "isBuffering: ${playingStatus.isBuffering} " +
-                    "smoothToIdlePercent: ${playingStatus.smoothToIdlePercent} smoothToTalkPercent: ${playingStatus.smoothToTalkPercent} " +
-                    "nextReady: ${nextReady}")
         } else {
-            LogUtils.v(TAG, "update reset")
             playingStatus.smoothToTalkStartTime = -1
             playingStatus.smoothToIdlePercent = -1f
             playingStatus.smoothToTalkPercent = -1f
@@ -477,7 +436,6 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
 
         return playingStatus
     }
-
 
     interface Listener {
         fun onPlayStart()

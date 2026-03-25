@@ -172,9 +172,7 @@ class MainView(private val mainActivity: MainActivity, val callback:MainViewCall
             if (textDebugInfo.text.isEmpty()) {
                 textDebugInfo.text = mainActivity.getString(R.string.debug_model_size,
                     calculateSizeString(File(MHConfig.LLM_MODEL_DIR)),
-                    calculateSizeString(File(MHConfig.TTS_MODEL_DIR)),
                     calculateSizeString(File(MHConfig.A2BS_MODEL_DIR)),
-                    calculateSizeString(File(MHConfig.ASR_MODEL_DIR)),
                     calculateSizeString(File(MHConfig.NNR_MODEL_DIR))
                 )
             }
