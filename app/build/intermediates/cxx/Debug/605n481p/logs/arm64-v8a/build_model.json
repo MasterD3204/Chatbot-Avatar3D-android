@@ -154,6 +154,7 @@
         "rootBuildGradleFolder": "C:\\Users\\dqdung\\Chatbot-Avatar3D-android",
         "sdkFolder": "C:\\Users\\dqdung\\AppData\\Local\\Android\\Sdk",
         "isBuildOnlyTargetAbiEnabled": true,
+        "ideBuildTargetAbi": "arm64-v8a",
         "isCmakeBuildCohabitationEnabled": false,
         "isPrefabEnabled": false
       },

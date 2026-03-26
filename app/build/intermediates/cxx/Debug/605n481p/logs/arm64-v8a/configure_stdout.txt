@@ -10,7 +10,6 @@
 -- Check for working CXX compiler: C:/Users/dqdung/AppData/Local/Android/Sdk/ndk/27.2.12479018/toolchains/llvm/prebuilt/windows-x86_64/bin/clang++.exe - skipped
 -- Detecting CXX compile features
 -- Detecting CXX compile features - done
--- MNN_SOURCE_ROOT: C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/../../../../../../
 -- All source files in project:
 -- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/a2bs_droid/a2bs_service.cpp
 -- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/a2bs_droid/a2bs_service_jni.cpp
@@ -22,3 +21,4 @@
 -- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/jni/nnr_avatar_render_jni.cpp
 -- Configuring done
 -- Generating done
+-- Build files have been written to: C:/Users/dqdung/Chatbot-Avatar3D-android/app/.cxx/Debug/605n481p/arm64-v8a
