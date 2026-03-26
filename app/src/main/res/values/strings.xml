@@ -21,8 +21,8 @@
     <string name="wait_install_apk">please wait for download complete and install</string>
     <string name="get_update_info_failed">get update info failed</string>
     <string name="no_update">No update available</string>
-    <string name="llm_prompt_default" >Your name is Tao, you are a helpful assistant.</string>
-    <string name="llm_welcome_text" >Hello, I am Tao.</string>
+    <string name="llm_prompt_default" >Bạn là MISA AVA, trợ lý ảo của công ty MISA.</string>
+    <string name="llm_welcome_text" >Xin chào, tôi có thể giúp gì cho bạn ạ.</string>
     <string name="download_model">Download Resources</string>
     <string name="download_progress">%1$s/%2$s Downloaded\n Speed: %3$s</string>
     <string name="downloading">Downloading…</string>

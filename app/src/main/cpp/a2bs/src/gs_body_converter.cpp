@@ -61,7 +61,7 @@ GSBodyConverter::GSBodyConverter(const std::string &local_resource_root,
     local_resource_root_ = local_resource_root;
 
     MNN::BackendConfig backend_config;
-    executor_ = Executor::newExecutor(MNN_FORWARD_OPENCL, backend_config, 1);
+    executor_ = Executor::newExecutor(MNN_FORWARD_CPU, backend_config, 1);
     ExecutorScope scope(executor_);
 
     MNN::ScheduleConfig sConfig;
@@ -70,7 +70,7 @@ GSBodyConverter::GSBodyConverter(const std::string &local_resource_root,
     cpuBackendConfig.memory = BackendConfig::Memory_Low;
     sConfig.numThread = 1;
     sConfig.backendConfig = &cpuBackendConfig;
-    sConfig.type = MNN_FORWARD_OPENCL;
+    sConfig.type = MNN_FORWARD_CPU;
     std::shared_ptr<Executor::RuntimeManager> rtmgr(Executor::RuntimeManager::createRuntimeManager(sConfig),
                                                     Executor::RuntimeManager::destroy);
     if (rtmgr == nullptr) {

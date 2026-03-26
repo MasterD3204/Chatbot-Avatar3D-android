@@ -15,6 +15,7 @@
 -- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/a2bs_droid/a2bs_service_jni.cpp
 -- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/common/file_loader.cpp
 -- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/common/file_utils.cpp
+-- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/common/mnn_backend.cpp
 -- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/cpp/llm_droid/llm_mnn_jni.cpp
 -- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/jni/jni_utils.cpp
 -- C:/Users/dqdung/Chatbot-Avatar3D-android/app/src/main/jni/nnr_avatar_render.cpp
