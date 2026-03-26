@@ -1,69 +1,83 @@
 package com.taobao.meta.avatar.llm
 
+import android.content.Context
 import android.util.Log
-import com.alibaba.mls.api.ApplicationProvider
-import com.alibaba.mnnllm.android.ChatService
-import com.alibaba.mnnllm.android.ChatSession
+import com.taobao.meta.avatar.llm.litert.LiteRtLlmEngine
 import com.taobao.meta.avatar.settings.MainSettings
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.cancellable
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 
-class LlmService {
+/**
+ * LlmService wraps [LiteRtLlmEngine] and exposes the same API surface
+ * previously provided by the MNN-based ChatSession/ChatService.
+ *
+ * The output Flow<Pair<String?, String>> matches what MainActivity expects:
+ *   - first  = partial token (null signals end of stream — never emitted here)
+ *   - second = full accumulated text so far
+ */
+class LlmService(private val context: Context) {
 
-    private var chatSession: ChatSession? = null
+    private var llmEngine: LlmEngine? = null
     private var stopRequested = false
 
-    suspend fun init(modelDir: String?): Boolean = withContext(Dispatchers.IO) {
-        Log.d(TAG, "createSession begin")
-        chatSession = ChatService.provide().createSession(
-            "test_modelId_sessionId",
-            "$modelDir/config.json",
-            false, "llm_session", null
+    /** Init engine. [modelName] is the .litertlm filename to search for. */
+    suspend fun init(modelName: String?): Boolean {
+        if (modelName.isNullOrBlank()) {
+            Log.e(TAG, "modelName is null or blank — cannot init LLM")
+            return false
+        }
+        val prompt = MainSettings.getLlmPrompt(context)
+        val engine = LiteRtLlmEngine(
+            context = context,
+            modelName = modelName,
+            systemPrompt = prompt,
+            maxTokens = 1024,
+            temperature = 0.1f,
+            topK = 8,
+            topP = 0.95f,
+            maxHistoryTurns = 2,
+            noThink = false
         )
-        Log.d(TAG, "createSession create success")
-        chatSession!!.load()
-        Log.d(TAG, "createSession  load success")
-        true
+        val ok = engine.init()
+        if (ok) llmEngine = engine
+        return ok
     }
 
+    /** Reset context window / history for a new chat session. */
     fun startNewSession() {
-        chatSession?.reset()
-        chatSession?.updatePrompt(MainSettings.getLlmPrompt(ApplicationProvider.get()))
+        llmEngine?.resetHistory()
     }
 
-    fun generate(text: String): Flow<Pair<String?, String>> = channelFlow {
+    /**
+     * Stream LLM tokens for [text].
+     * Emits pairs of (partialToken, accumulatedText).
+     */
+    fun generate(text: String): Flow<Pair<String?, String>> {
         stopRequested = false
         val result = StringBuilder()
-        withContext(Dispatchers.Default) {
-            chatSession?.generate(text, object : ChatSession.GenerateProgressListener {
-                override fun onProgress(progress: String?):Boolean {
-                    CoroutineScope(Dispatchers.Default).launch {
-                        if (progress != null) {
-                            result.append(progress)
-                        }
-                        send(Pair(progress, result.toString()))
-                    }
-                    return stopRequested
-                }
-            })
-        }
-    }.cancellable()
+        return (llmEngine?.chatStream(text) ?: emptyFlow())
+            .onEach { token ->
+                result.append(token)
+            }
+            .map { token ->
+                Pair(token, result.toString())
+            }
+            .cancellable()
+    }
 
     fun requestStop() {
         stopRequested = true
     }
 
     fun unload() {
-        chatSession?.release()
+        llmEngine?.release()
+        llmEngine = null
     }
 
     companion object {
-        private const val TAG = "LLMService"
+        private const val TAG = "LlmService"
     }
 }
-

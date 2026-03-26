@@ -170,8 +170,10 @@ class MainView(private val mainActivity: MainActivity, val callback:MainViewCall
     fun updateDebugInfo() {
         if (MainSettings.isShowDebugInfo(mainActivity)) {
             if (textDebugInfo.text.isEmpty()) {
+                val llmModelName = MainSettings.getLlmModelName(mainActivity)
+                    ?: MHConfig.LLM_MODEL_FILENAME_DEFAULT
                 textDebugInfo.text = mainActivity.getString(R.string.debug_model_size,
-                    calculateSizeString(File(MHConfig.LLM_MODEL_DIR)),
+                    llmModelName,
                     calculateSizeString(File(MHConfig.A2BS_MODEL_DIR)),
                     calculateSizeString(File(MHConfig.NNR_MODEL_DIR))
                 )

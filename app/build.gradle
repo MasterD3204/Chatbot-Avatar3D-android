@@ -16,19 +16,35 @@ task downloadAndUnzipNativeLibs {
     doLast {
         println "-> Executing downloadAndUnzipNativeLibs task..."
         println "   Downloading from ${nativeLibsUrl}"
-        ant.get(src: nativeLibsUrl, dest: downloadedZip)
+        try {
+            ant.get(src: nativeLibsUrl, dest: downloadedZip, ignoreerrors: true)
 
-        if (!downloadedZip.exists()) {
-            throw new GradleException("Download failed: ${downloadedZip} not found.")
+            if (!downloadedZip.exists() || downloadedZip.length() < 1024) {
+                println "   WARNING: Download failed or incomplete - skipping native libs extraction."
+                println "   The app will build but sherpa-onnx TTS features may not work at runtime."
+                return
+            }
+            // Validate it's a zip file (magic bytes PK)
+            def bytes = new byte[2]
+            downloadedZip.withInputStream { it.read(bytes) }
+            if (bytes[0] != 0x50 || bytes[1] != 0x4B) {
+                println "   WARNING: Downloaded file is not a valid ZIP - skipping extraction."
+                downloadedZip.delete()
+                return
+            }
+            println "   Download complete."
+            println "   Unzipping ${downloadedZip.name} to project root..."
+            copy {
+                from(zipTree(downloadedZip))
+                into(outputDir)
+            }
+            println "   Unzip complete."
+        } catch (Exception e) {
+            println "   WARNING: Could not download native libs: ${e.message}"
+            println "   The app will build but sherpa-onnx TTS features may not work at runtime."
+        } finally {
+            if (downloadedZip.exists()) downloadedZip.delete()
         }
-        println "   Download complete."
-        println "   Unzipping ${downloadedZip.name} to project root..."
-        copy {
-            from(zipTree(downloadedZip))
-            into(outputDir)
-        }
-        println "   Unzip complete."
-        downloadedZip.delete()
     }
     onlyIf {
         println "-> Checking if native libs exist... [Exists: ${checkFile.exists()}]"
@@ -39,8 +55,8 @@ preBuild.dependsOn downloadAndUnzipNativeLibs
 
 android {
     namespace 'com.taobao.meta.avatar'
-    compileSdk 35
-    ndkVersion '27.2.12479018'
+    compileSdk 36
+    ndkVersion '26.1.10909125'
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -53,7 +69,7 @@ android {
     defaultConfig {
         applicationId  "com.taobao.meta.avatar"
         minSdk 26
-        targetSdk 35
+        targetSdk 34
         versionCode 1
         versionName "0.0.2"
 
@@ -66,7 +82,6 @@ android {
     }
     externalNativeBuild {
         cmake {
-            version '3.22.1'
             path 'src/main/CMakeLists.txt'
         }
     }
@@ -111,4 +126,6 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
     implementation project(':model_downloader')
+    // LiteRT LLM engine
+    implementation 'com.google.ai.edge.litertlm:litertlm-android:0.9.0-alpha06'
 }

@@ -8,7 +8,6 @@ set(CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpp)
 set(JNI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/jni)
 set (THIRD_PARTY_INCLUDES_DIR ${CMAKE_CURRENT_LIST_DIR}/cpp/third_party/)
 set (A2BS_DROID_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpp/a2bs_droid)
-set (LLM_DROID_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpp/llm_droid)
 
 include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CPP_DIR}/3rd_party
@@ -27,8 +26,7 @@ FILE(GLOB A2BS_DROID_SRC
 FILE(GLOB CPP_SRCS
         ${CPP_DIR}/*.cpp
         ${COMMON_DIR}/*.cpp
-        ${A2BS_DROID_SRC}
-        ${LLM_DROID_DIR}/*.cpp)
+        ${A2BS_DROID_SRC})
 
 FILE(GLOB JNI_SRCS
         ${JNI_DIR}/*.cpp)

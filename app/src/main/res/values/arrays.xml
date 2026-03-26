@@ -13,5 +13,10 @@
         <item>F1</item>
         <item>F2</item>
     </string-array>
+
+    <!-- Placeholder — replaced at runtime by MainSettingsFragment -->
+    <string-array name="llm_model_names_placeholder">
+        <item>model.litertlm</item>
+    </string-array>
 </resources>
 

@@ -17,9 +17,11 @@ object MHConfig {
     val A2BS_MODEL_DIR
         get() = "${BASE_DIR}/UniTalker-MNN/"
 
-    /** Fallback LLM model directory when no model found in Downloads. */
-    val LLM_MODEL_DIR
-        get() = "${BASE_DIR}/Qwen2.5-1.5B-Instruct-MNN"
+    /**
+     * Default LLM model filename (.litertlm) when no model is selected.
+     * The actual file will be searched in /sdcard/Download/ and other common paths.
+     */
+    const val LLM_MODEL_FILENAME_DEFAULT = "model.litertlm"
 
     const val DEBUG_MODE = false
 

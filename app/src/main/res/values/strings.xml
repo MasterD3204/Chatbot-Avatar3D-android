@@ -39,5 +39,9 @@
     <string name="tts_speaker_male_2">Male Voice 2</string>
     <string name="tts_speaker_female_1">Female Voice 1</string>
     <string name="tts_speaker_female_2">Female Voice 2</string>
+    <string name="llm_settings_category">LLM Model</string>
+    <string name="llm_model_title">Select Model</string>
+    <string name="llm_model_summary">Current: %s</string>
+    <string name="llm_model_no_models">No .litertlm files found in Downloads</string>
 
 </resources>

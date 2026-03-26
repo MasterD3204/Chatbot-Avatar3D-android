@@ -21,6 +21,16 @@
 <!--            android:showSeekBarValue="true" />-->
     </PreferenceCategory>
 
+    <!-- LLM model selection -->
+    <PreferenceCategory android:title="@string/llm_settings_category">
+        <ListPreference
+            android:key="llm_model_name"
+            android:title="@string/llm_model_title"
+            android:entries="@array/llm_model_names_placeholder"
+            android:entryValues="@array/llm_model_names_placeholder"
+            android:defaultValue="" />
+    </PreferenceCategory>
+
     <!-- 现有设置 -->
     <EditTextPreference
         android:key="llm_prompt"

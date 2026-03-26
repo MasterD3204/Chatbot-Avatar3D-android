@@ -18,9 +18,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class DownloadModule(private val context: Activity) {
 
-    //define the minimal repos to download
+    //define the minimal repos to download (LLM model is now loaded from device /sdcard/Download/ as .litertlm)
     private val reposToDownload = listOf(
-        "ModelScope/MNN/Qwen2.5-1.5B-Instruct-MNN",
         "ModelScope/MNN/UniTalker-MNN",
         "ModelScope/MNN/TaoAvatar-NNR-MNN"
     )

@@ -87,7 +87,7 @@ class MainActivity : AppCompatActivity(),
         a2bsService = A2BSService()
         piperTtsEngine = PiperTtsEngine(this)
         llmPresenter = LlmPresenter(mainView.textResponse)
-        llmService = LlmService()
+        llmService = LlmService(this)
         nnrAvatarRender = NnrAvatarRender(avatarTextureView, MHConfig.NNR_MODEL_DIR)
         val debugModule = DebugModule()
         debugModule.setupDebug(this)
@@ -321,6 +321,7 @@ class MainActivity : AppCompatActivity(),
         super.onDestroy()
         sttService.destroy()
         piperTtsEngine.destroy()
+        llmService.unload()
         if (memoryMonitor != null) {
             memoryMonitor!!.stopMonitoring()
         }
@@ -357,48 +358,62 @@ class MainActivity : AppCompatActivity(),
 
     /**
      * Load LLM model.
-     * Priority: saved path from Settings → scanned from Downloads → fallback MHConfig.LLM_MODEL_DIR
+     * Priority: saved model name from Settings → scan Downloads for .litertlm files
+     *            → fallback default filename [MHConfig.LLM_MODEL_FILENAME_DEFAULT]
      */
     private suspend fun loadLLMModel() {
-        val modelDir = resolveLlmModelDir()
-        Log.i(TAG, "Loading LLM from: $modelDir")
-        llmService.init(modelDir)
+        val modelName = resolveLlmModelName()
+        Log.i(TAG, "Loading LLM model: $modelName")
+        llmService.init(modelName)
     }
 
-    private suspend fun resolveLlmModelDir(): String = withContext(Dispatchers.IO) {
-        // 1. Use previously saved path if still valid
-        val savedPath = MainSettings.getLlmModelPath(this@MainActivity)
-        if (savedPath != null && File(savedPath, "config.json").exists()) {
-            return@withContext savedPath
+    private suspend fun resolveLlmModelName(): String = withContext(Dispatchers.IO) {
+        // 1. Use previously saved model name if still valid
+        val savedName = MainSettings.getLlmModelName(this@MainActivity)
+        if (savedName != null) {
+            // Verify the file still exists somewhere reachable
+            val searchRoots = listOf(
+                "/sdcard",
+                "/sdcard/Download",
+                "/storage/emulated/0",
+                "/storage/emulated/0/Download",
+                context.getExternalFilesDir(null)?.absolutePath ?: ""
+            )
+            val stillValid = searchRoots.any { File(it, savedName).exists() }
+            if (stillValid) {
+                Log.i(TAG, "Using saved LLM model name: $savedName")
+                return@withContext savedName
+            }
         }
 
-        // 2. Scan /sdcard/Download/ for folders containing config.json
-        val found = scanLlmModelsInDownloads()
+        // 2. Scan /sdcard/Download/ for .litertlm files
+        val found = scanLitertlmModelsInDownloads()
         if (found.isNotEmpty()) {
-            val path = found.first().absolutePath
-            MainSettings.setLlmModelPath(this@MainActivity, path)
-            Log.i(TAG, "Auto-selected LLM model from Downloads: $path")
-            return@withContext path
+            val name = found.first().name
+            MainSettings.setLlmModelName(this@MainActivity, name)
+            Log.i(TAG, "Auto-selected LLM model from Downloads: $name")
+            return@withContext name
         }
 
-        // 3. Fallback to default ModelScope path
-        MHConfig.LLM_MODEL_DIR
+        // 3. Fallback to default
+        Log.w(TAG, "No .litertlm model found, using default: ${MHConfig.LLM_MODEL_FILENAME_DEFAULT}")
+        MHConfig.LLM_MODEL_FILENAME_DEFAULT
     }
 
     /**
-     * Scan the public Downloads directory for folders that contain a config.json.
-     * These are treated as valid MNN LLM model directories.
+     * Scan the public Downloads directory for .litertlm files.
      */
-    fun scanLlmModelsInDownloads(): List<File> {
+    fun scanLitertlmModelsInDownloads(): List<File> {
         val downloadDir = Environment.getExternalStoragePublicDirectory(
-            Environment.DIRECTORY_DOWNLOADS)
+            Environment.DIRECTORY_DOWNLOADS
+        )
         return try {
             downloadDir.listFiles()
-                ?.filter { it.isDirectory && File(it, "config.json").exists() }
+                ?.filter { it.isFile && it.name.endsWith(".litertlm", ignoreCase = true) }
                 ?.sortedByDescending { it.lastModified() }
                 ?: emptyList()
         } catch (e: Exception) {
-            Log.e(TAG, "scanLlmModelsInDownloads failed", e)
+            Log.e(TAG, "scanLitertlmModelsInDownloads failed", e)
             emptyList()
         }
     }

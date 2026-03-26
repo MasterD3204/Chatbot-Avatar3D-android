@@ -10,7 +10,7 @@ import com.taobao.meta.avatar.R
 
 object MainSettings {
 
-    private const val KEY_LLM_MODEL_PATH = "llm_model_path"
+    private const val KEY_LLM_MODEL_NAME = "llm_model_name"
 
     fun getLlmPrompt(context: Context): String {
         val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
@@ -28,21 +28,22 @@ object MainSettings {
     }
 
     /**
-     * Returns the previously saved LLM model directory path, or null if not set.
-     * The path is auto-populated when a model is found in Downloads.
+     * Returns the previously saved LLM model filename (.litertlm), or null if not set.
+     * This is just the filename (e.g. "model.litertlm"), not a full path.
+     * The engine will search for it in standard locations (/sdcard/Download/, etc.).
      */
-    fun getLlmModelPath(context: Context): String? =
+    fun getLlmModelName(context: Context): String? =
         PreferenceManager.getDefaultSharedPreferences(context)
-            .getString(KEY_LLM_MODEL_PATH, null)
+            .getString(KEY_LLM_MODEL_NAME, null)
             ?.takeIf { it.isNotBlank() }
 
     /**
-     * Persist the LLM model directory path so it survives app restarts.
+     * Persist the LLM model filename so it survives app restarts.
      */
-    fun setLlmModelPath(context: Context, path: String) {
+    fun setLlmModelName(context: Context, name: String) {
         PreferenceManager.getDefaultSharedPreferences(context)
             .edit()
-            .putString(KEY_LLM_MODEL_PATH, path)
+            .putString(KEY_LLM_MODEL_NAME, name)
             .apply()
     }
 }
