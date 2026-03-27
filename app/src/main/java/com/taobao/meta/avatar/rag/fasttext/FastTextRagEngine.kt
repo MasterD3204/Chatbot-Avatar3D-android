@@ -1,0 +1,301 @@
+package com.taobao.meta.avatar.rag.fasttext
+
+import android.content.Context
+import android.util.Log
+import com.taobao.meta.avatar.rag.RagEngine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.ObjectInputStream
+import java.io.ObjectOutputStream
+import java.security.MessageDigest
+import java.util.StringTokenizer
+import kotlin.coroutines.coroutineContext
+import kotlin.math.ln
+import kotlin.math.min
+import kotlin.math.sqrt
+
+/**
+ * RAG engine kết hợp BM25 + Cosine similarity (FastText embeddings).
+ *
+ * ── Thuật toán ────────────────────────────────────────────────────────────
+ * 1. BM25 via Inverted Index  → O(K) thay vì O(N)
+ * 2. Cosine similarity        → trên candidates từ BM25
+ * 3. Hybrid score             → 0.4 * cosine + 0.6 * normalized_bm25
+ * 4. Trả về top-3 answers đạt ngưỡng ≥ [SIMILARITY_THRESHOLD]
+ *
+ * ── Định dạng file QA (assets/qa_database.txt) ───────────────────────────
+ *   câu hỏi|câu trả lời
+ *   (mỗi dòng một cặp, phân cách bằng dấu |)
+ *
+ * ── Định dạng file vector (assets/vi_fasttext_pruned.vec) ─────────────────
+ *   Dòng 1: <vocab_size> <dim>
+ *   Còn lại: <word> <f1> <f2> … <f300>
+ */
+class FastTextRagEngine(private val context: Context) : RagEngine {
+
+    companion object {
+        private const val TAG = "FastTextRagEngine"
+        private const val EMBEDDING_DIM = 300
+        private const val CACHE_FILE = "fasttext_rag_cache_v1.bin"
+        private const val SIMILARITY_THRESHOLD = 0.8f
+        private const val TOP_K = 3
+        private const val K1 = 1.2
+        private const val B  = 0.75
+        private const val BM25_MAX_SCORE = 5.0
+        private const val COSINE_WEIGHT = 0.4
+        private const val BM25_WEIGHT   = 0.6
+    }
+
+    private data class QAPair(
+        val id: Int,
+        val question: String,
+        val answer: String,
+        var vector: FloatArray? = null
+    )
+
+    private val qaList        = mutableListOf<QAPair>()
+    private val wordVectors   = HashMap<String, FloatArray>(50_000)
+
+    private val invertedIndex = HashMap<String, List<Pair<Int, Int>>>()
+    private val docTermFreq   = mutableListOf<Map<String, Int>>()
+    private val docLengths    = mutableListOf<Int>()
+    private val idf           = HashMap<String, Double>()
+    private var avgDocLen     = 0.0
+    private var qaContentHash = ""
+
+    @Volatile private var _initialized = false
+    override val isInitialized: Boolean get() = _initialized
+
+    // ── Public API ────────────────────────────────────────────────────────
+
+    override suspend fun initialize(qaFile: String, vectorFile: String) {
+        withContext(Dispatchers.IO) {
+            val t0 = System.currentTimeMillis()
+            try {
+                loadQaPairs(qaFile)
+                loadWordVectors(vectorFile)
+                buildIndices()
+                _initialized = true
+                Log.i(TAG, "RAG ready in ${System.currentTimeMillis() - t0}ms — " +
+                        "${qaList.size} QA pairs, ${wordVectors.size} vectors")
+            } catch (e: Throwable) {
+                Log.e(TAG, "Initialization failed", e)
+                _initialized = false
+            }
+        }
+    }
+
+    override suspend fun search(query: String): List<String>? {
+        if (!_initialized || qaList.isEmpty()) return null
+        return withContext(Dispatchers.Default) {
+            val tokens   = tokenize(query)
+            if (tokens.isEmpty()) return@withContext null
+            val queryVec = sentenceEmbedding(tokens)
+            val bm25     = computeBm25Scores(tokens)
+            val hits     = scoreHybrid(queryVec, bm25)
+                .filter  { it.score >= SIMILARITY_THRESHOLD }
+                .sortedByDescending { it.score }
+                .take(TOP_K)
+            logResult(query, hits, bm25.size)
+            if (hits.isEmpty()) null else hits.map { it.answer }
+        }
+    }
+
+    override fun release() {
+        wordVectors.clear(); qaList.clear(); invertedIndex.clear()
+        docTermFreq.clear(); docLengths.clear(); idf.clear()
+        _initialized = false
+    }
+
+    // ── Load ──────────────────────────────────────────────────────────────
+
+    private suspend fun loadQaPairs(fileName: String) {
+        qaList.clear()
+        var id = 0
+        val hashBuilder = StringBuilder()
+        context.assets.open(fileName).bufferedReader().use { reader ->
+            var line = reader.readLine()
+            while (line != null) {
+                coroutineContext.ensureActive()
+                val t = line.trim()
+                if (t.isNotBlank()) {
+                    val pipeIdx = t.indexOf('|')
+                    if (pipeIdx != -1) {
+                        val question = t.substring(0, pipeIdx).trim().lowercase()
+                        val answer   = t.substring(pipeIdx + 1).trim()
+                        if (question.isNotEmpty() && answer.isNotEmpty()) {
+                            qaList += QAPair(id++, question, answer)
+                            hashBuilder.append(question)
+                        }
+                    }
+                }
+                line = reader.readLine()
+            }
+        }
+        qaContentHash = hashBuilder.toString().md5()
+        Log.i(TAG, "Loaded ${qaList.size} QA pairs")
+    }
+
+    private suspend fun loadWordVectors(fileName: String) {
+        wordVectors.clear()
+        var lineCount = 0
+        context.assets.open(fileName).bufferedReader().use { reader ->
+            reader.readLine() // skip header
+            var line = reader.readLine()
+            while (line != null) {
+                if (++lineCount % 5000 == 0) coroutineContext.ensureActive()
+                if (line.isNotBlank()) {
+                    val spIdx = line.indexOf(' ')
+                    if (spIdx != -1) {
+                        val word = line.substring(0, spIdx)
+                        val st   = StringTokenizer(line.substring(spIdx + 1), " ")
+                        val vec  = FloatArray(EMBEDDING_DIM)
+                        var i = 0
+                        while (st.hasMoreTokens() && i < EMBEDDING_DIM) vec[i++] = st.nextToken().toFloat()
+                        wordVectors[word] = vec
+                    }
+                }
+                line = reader.readLine()
+            }
+        }
+        Log.i(TAG, "Loaded ${wordVectors.size} word vectors")
+    }
+
+    // ── Index building ────────────────────────────────────────────────────
+
+    private fun buildIndices() {
+        docLengths.clear(); idf.clear(); docTermFreq.clear()
+        val docFreq         = HashMap<String, Int>()
+        val invertedBuilder = HashMap<String, MutableList<Pair<Int, Int>>>()
+
+        qaList.forEachIndexed { idx, qa ->
+            val tokens = tokenize(qa.question)
+            docLengths.add(tokens.size)
+            val tfMap = HashMap<String, Int>()
+            for (t in tokens) tfMap[t] = (tfMap[t] ?: 0) + 1
+            docTermFreq.add(tfMap)
+            for ((token, freq) in tfMap) {
+                docFreq[token] = (docFreq[token] ?: 0) + 1
+                invertedBuilder.getOrPut(token) { mutableListOf() } += Pair(idx, freq)
+            }
+        }
+
+        invertedIndex.clear()
+        for ((token, postings) in invertedBuilder) invertedIndex[token] = postings.toList()
+        avgDocLen = docLengths.average()
+        val n = qaList.size.toDouble()
+        for ((term, freq) in docFreq) idf[term] = ln((n - freq + 0.5) / (freq + 0.5) + 1.0)
+
+        buildAndCacheEmbeddings()
+        Log.i(TAG, "Built inverted index — ${invertedIndex.size} unique terms")
+    }
+
+    private fun buildAndCacheEmbeddings() {
+        val cacheFile = File(context.cacheDir, CACHE_FILE)
+        if (cacheFile.exists()) {
+            try {
+                ObjectInputStream(FileInputStream(cacheFile)).use { ois ->
+                    val cachedHash    = ois.readObject() as? String
+                    @Suppress("UNCHECKED_CAST")
+                    val cachedVectors = ois.readObject() as List<FloatArray>
+                    if (cachedHash == qaContentHash && cachedVectors.size == qaList.size) {
+                        for (i in qaList.indices) qaList[i].vector = cachedVectors[i]
+                        Log.i(TAG, "Loaded ${qaList.size} embeddings from cache")
+                        return
+                    }
+                    Log.w(TAG, "Cache invalid — rebuilding")
+                }
+            } catch (e: Exception) { Log.w(TAG, "Cache read failed", e) }
+        }
+
+        val toCache = mutableListOf<FloatArray>()
+        qaList.forEach { qa ->
+            val vec = sentenceEmbedding(tokenize(qa.question))
+            qa.vector = vec; toCache += vec
+        }
+        try {
+            ObjectOutputStream(FileOutputStream(cacheFile)).use { oos ->
+                oos.writeObject(qaContentHash); oos.writeObject(toCache)
+            }
+            Log.i(TAG, "Saved ${toCache.size} embeddings to cache")
+        } catch (e: Exception) { Log.w(TAG, "Failed to save cache", e) }
+    }
+
+    // ── Scoring ───────────────────────────────────────────────────────────
+
+    private fun computeBm25Scores(queryTokens: List<String>): HashMap<Int, Double> {
+        val scores = HashMap<Int, Double>()
+        for (token in queryTokens) {
+            val idfVal   = idf[token]            ?: continue
+            val postings = invertedIndex[token]  ?: continue
+            for ((docIdx, tf) in postings) {
+                val docLen = docLengths[docIdx]
+                val num    = tf * (K1 + 1)
+                val den    = tf + K1 * (1 - B + B * (docLen / avgDocLen))
+                scores[docIdx] = (scores[docIdx] ?: 0.0) + idfVal * (num / den)
+            }
+        }
+        return scores
+    }
+
+    private data class ScoredResult(val score: Double, val answer: String, val question: String)
+
+    private fun scoreHybrid(queryVec: FloatArray, bm25: HashMap<Int, Double>): List<ScoredResult> {
+        val candidates = if (bm25.isNotEmpty()) bm25.keys else qaList.indices.toSet()
+        return candidates.mapNotNull { idx ->
+            val qa       = qaList[idx]
+            val docVec   = qa.vector ?: return@mapNotNull null
+            val cosine   = dotProduct(queryVec, docVec).toDouble()
+            val normBm25 = min(bm25[idx] ?: 0.0, BM25_MAX_SCORE) / BM25_MAX_SCORE
+            ScoredResult(cosine * COSINE_WEIGHT + normBm25 * BM25_WEIGHT, qa.answer, qa.question)
+        }
+    }
+
+    // ── Embedding ─────────────────────────────────────────────────────────
+
+    private fun sentenceEmbedding(tokens: List<String>): FloatArray {
+        val vec   = FloatArray(EMBEDDING_DIM)
+        var count = 0
+        for (token in tokens) {
+            val wv = wordVectors[token] ?: continue
+            for (i in 0 until EMBEDDING_DIM) vec[i] += wv[i]
+            count++
+        }
+        if (count > 0) { val inv = 1f / count; for (i in vec.indices) vec[i] *= inv }
+        var normSq = 0f
+        for (v in vec) normSq += v * v
+        val norm = sqrt(normSq)
+        if (norm > 0f) { val inv = 1f / norm; for (i in vec.indices) vec[i] *= inv }
+        return vec
+    }
+
+    private fun dotProduct(a: FloatArray, b: FloatArray): Float {
+        var s = 0f; for (i in a.indices) s += a[i] * b[i]; return s
+    }
+
+    private fun tokenize(text: String): List<String> =
+        text.lowercase()
+            .replace(Regex("[^a-z0-9àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ ]"), "")
+            .split("\\s+".toRegex())
+            .filter { it.isNotBlank() }
+
+    // ── Logging ───────────────────────────────────────────────────────────
+
+    private fun logResult(query: String, hits: List<ScoredResult>, candidateCount: Int) {
+        if (hits.isEmpty()) {
+            Log.i(TAG, "MISS — query='$query' (0 docs ≥ $SIMILARITY_THRESHOLD from $candidateCount candidates)")
+        } else {
+            Log.i(TAG, "HIT — ${hits.size} result(s) for '$query'")
+            hits.forEachIndexed { i, h ->
+                Log.i(TAG, "  [${i+1}] score=${"%.3f".format(h.score)} | ${h.question.take(60)}")
+            }
+        }
+    }
+
+    private fun String.md5(): String =
+        MessageDigest.getInstance("MD5").digest(toByteArray()).joinToString("") { "%02x".format(it) }
+}

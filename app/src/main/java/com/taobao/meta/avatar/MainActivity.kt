@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
-import android.os.Environment
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
@@ -22,14 +21,13 @@ import com.taobao.meta.avatar.asr.AndroidSttService
 import com.taobao.meta.avatar.debug.DebugModule
 import com.taobao.meta.avatar.download.DownloadCallback
 import com.taobao.meta.avatar.download.DownloadModule
+import com.taobao.meta.avatar.llm.FaqService
 import com.taobao.meta.avatar.llm.LlmPresenter
-import com.taobao.meta.avatar.llm.LlmService
 import com.taobao.meta.avatar.nnr.AvatarTextureView
 import com.taobao.meta.avatar.nnr.NnrAvatarRender
 import com.taobao.meta.avatar.record.RecordPermission
 import com.taobao.meta.avatar.record.RecordPermission.REQUEST_RECORD_AUDIO_PERMISSION
 import com.taobao.meta.avatar.record.StoragePermission
-import com.taobao.meta.avatar.settings.MainSettings
 import com.taobao.meta.avatar.tts.PiperTtsEngine
 import com.taobao.meta.avatar.utils.MemoryMonitor
 import kotlinx.coroutines.CompletableDeferred
@@ -56,7 +54,7 @@ class MainActivity : AppCompatActivity(),
 
     private lateinit var avatarTextureView: AvatarTextureView
     private var a2bsService: A2BSService? = null
-    private lateinit var llmService: LlmService
+    private lateinit var faqService: FaqService
     private lateinit var llmPresenter: LlmPresenter
     private lateinit var piperTtsEngine: PiperTtsEngine
     private var memoryMonitor: MemoryMonitor? = null
@@ -88,25 +86,21 @@ class MainActivity : AppCompatActivity(),
         a2bsService = A2BSService()
         piperTtsEngine = PiperTtsEngine(this)
         llmPresenter = LlmPresenter(mainView.textResponse)
-        llmService = LlmService(this)
+        faqService = FaqService(this)
         nnrAvatarRender = NnrAvatarRender(avatarTextureView, MHConfig.NNR_MODEL_DIR)
         val debugModule = DebugModule()
         debugModule.setupDebug(this)
         sttService = AndroidSttService(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        if (!StoragePermission.hasPermission(this)) {
-            StoragePermission.requestPermission(this)
-        } else if (downloadManager.isDownloadComplete() && !DebugModule.DEBUG_DISABLE_SERVICE_AUTO_START) {
-            lifecycleScope.launch {
-                setupServices()
-            }
+        if (downloadManager.isDownloadComplete() && !DebugModule.DEBUG_DISABLE_SERVICE_AUTO_START) {
+            lifecycleScope.launch { setupServices() }
         }
         mainView.updateDownloadStatus(downloadManager.isDownloadComplete())
     }
 
     private fun stopAnswer() {
         Log.d(TAG, "stopAnswer")
-        llmService.requestStop()
+        cancelAllJobs()
         llmPresenter.stop()
         nnrAvatarRender.reset()
         audioBendShapePlayer?.stop()
@@ -139,16 +133,13 @@ class MainActivity : AppCompatActivity(),
 
     override fun onStartButtonClicked() {
         if (ActivityCompat.checkSelfPermission(
-                this,
-                RecordPermission.permissions[0]
+                this, RecordPermission.permissions[0]
             ) == PackageManager.PERMISSION_GRANTED
         ) {
             handleStartChatInner()
         } else {
             ActivityCompat.requestPermissions(
-                this,
-                RecordPermission.permissions,
-                REQUEST_RECORD_AUDIO_PERMISSION
+                this, RecordPermission.permissions, REQUEST_RECORD_AUDIO_PERMISSION
             )
         }
     }
@@ -169,24 +160,19 @@ class MainActivity : AppCompatActivity(),
     }
 
     override fun onDownloadClicked() {
-        lifecycleScope.launch {
-            downloadManager.download()
-        }
+        lifecycleScope.launch { downloadManager.download() }
     }
 
     private fun onChatServiceStarted() {
         mainView.onChatServiceStarted()
-        llmService.startNewSession()
         lifecycleScope.launch {
             delay(2000)
             mainView.viewRotateHint.visibility = View.GONE
             val welcomeText = getString(R.string.llm_welcome_text)
             ensureActive()
             llmPresenter.onLlmTextUpdate(welcomeText, callingSessionId)
-            audioBendShapePlayer?.playSession(answerSession, welcomeText.split("[,，]"))
-        }.apply {
-            chatSessionJobs.add(this)
-        }
+            audioBendShapePlayer?.playSession(answerSession, splitIntoSentences(welcomeText))
+        }.apply { chatSessionJobs.add(this) }
         avatarTextureView.enableGestures = true
     }
 
@@ -207,9 +193,7 @@ class MainActivity : AppCompatActivity(),
 
     private suspend fun setupServices() {
         if (initComplete.isCompleted) return
-        if (serviceInitializing) {
-            initComplete.await()
-        }
+        if (serviceInitializing) { initComplete.await() }
         serviceInitializing = true
         lifecycleScope.async {
             val taskA2BS = async {
@@ -218,7 +202,6 @@ class MainActivity : AppCompatActivity(),
                 Log.i(TAG, "Task A2BS completed in ${System.currentTimeMillis() - t} ms")
             }
             val taskTTS = async {
-                Log.i(TAG, "Task TTS init begin")
                 val t = System.currentTimeMillis()
                 loadTTSModel()
                 Log.i(TAG, "Task TTS completed in ${System.currentTimeMillis() - t} ms")
@@ -228,26 +211,23 @@ class MainActivity : AppCompatActivity(),
                 loadNNRModel()
                 Log.i(TAG, "Task NNR completed in ${System.currentTimeMillis() - t} ms")
             }
-            val taskLLM = async {
+            val taskFaq = async {
                 val t = System.currentTimeMillis()
-                loadLLMModel()
-                Log.i(TAG, "Task LLM completed in ${System.currentTimeMillis() - t} ms")
+                loadFaqEngine()
+                Log.i(TAG, "Task FAQ completed in ${System.currentTimeMillis() - t} ms")
             }
             val taskStt = async {
                 val t = System.currentTimeMillis()
                 setupSttService()
                 Log.i(TAG, "Task STT completed in ${System.currentTimeMillis() - t} ms")
             }
-            awaitAll(taskA2BS, taskTTS, taskNNR, taskLLM, taskStt)
-            Log.i(TAG, "All services have been initialized")
+            awaitAll(taskA2BS, taskTTS, taskNNR, taskFaq, taskStt)
+            Log.i(TAG, "All services initialized")
 
-            // Wire up STT → processAsrText
             sttService.onRecognizeText = { text ->
                 if (chatStatus == ChatStatus.STATUS_CALLING) {
                     stopRecord()
-                    lifecycleScope.launch {
-                        processAsrText(text)
-                    }
+                    lifecycleScope.launch { processAsrText(text) }
                 }
             }
         }.await()
@@ -260,27 +240,48 @@ class MainActivity : AppCompatActivity(),
 
     private fun processAsrText(text: String) {
         answerSession++
-        Log.d(TAG, "onRecognizeText: $text sessionId: $answerSession")
+        Log.i(TAG, "processAsrText: '$text' session=$answerSession faqReady=${faqService.isReady()}")
+
         lifecycleScope.launch {
             llmPresenter.onUserTextUpdate(text)
             mainView.textStatus.setText(R.string.click_to_stop)
         }
         llmPresenter.start()
-        audioBendShapePlayer?.startNewSession(answerSession)
+
         lifecycleScope.launch {
             val callingSessionId = this@MainActivity.callingSessionId
-            Log.i(TAG, "processAsrText: starting LLM generate, engineReady=${llmService.isEngineReady()}")
-            llmService.generate(text).collect { pair ->
-                if (pair.first != null) {
-                    Log.v(TAG, "LLM token: '${pair.first}'")
-                    audioBendShapePlayer?.playStreamText(pair.first)
-                    llmPresenter.onLlmTextUpdate(pair.first!!, callingSessionId)
-                }
+
+            // Get answer from FAQ engine (< 10ms for a match)
+            val answer = withContext(Dispatchers.Default) { faqService.getAnswer(text) }
+            Log.i(TAG, "FAQ answer: '${answer.take(80)}'")
+
+            // Display answer on screen
+            llmPresenter.onLlmTextUpdate(answer, callingSessionId)
+
+            // Play via TTS → A2BS → NNR
+            audioBendShapePlayer?.playSession(answerSession, splitIntoSentences(answer))
+        }.apply { chatSessionJobs.add(this) }
+    }
+
+    /**
+     * Split text into sentence-level segments for TTS.
+     * "Xin chào! Tôi là MISA." → ["Xin chào!", "Tôi là MISA."]
+     */
+    private fun splitIntoSentences(text: String): List<String> {
+        val sentenceEnd = setOf('.', '!', '?', '。', '！', '？')
+        val segments = mutableListOf<String>()
+        val current = StringBuilder()
+        for (char in text) {
+            current.append(char)
+            if (char in sentenceEnd) {
+                val seg = current.toString().trim()
+                if (seg.isNotEmpty()) segments.add(seg)
+                current.clear()
             }
-            Log.i(TAG, "processAsrText: LLM generate finished")
-        }.apply {
-            chatSessionJobs.add(this)
         }
+        val remaining = current.toString().trim()
+        if (remaining.isNotEmpty()) segments.add(remaining)
+        return if (segments.isEmpty()) listOf(text) else segments
     }
 
     fun getAudioBlendShapePlayer(): AudioBlendShapePlayer? = audioBendShapePlayer
@@ -288,83 +289,46 @@ class MainActivity : AppCompatActivity(),
     private fun createAudioBlendShapePlayer() {
         audioBendShapePlayer = AudioBlendShapePlayer(nnrAvatarRender, this@MainActivity)
         audioBendShapePlayer!!.addListener(object : AudioBlendShapePlayer.Listener {
-            override fun onPlayStart() {
-                stopRecord()
-            }
-
+            override fun onPlayStart() { stopRecord() }
             override fun onPlayEnd() {
-                if (chatStatus == ChatStatus.STATUS_CALLING) {
-                    startRecord()
-                }
+                if (chatStatus == ChatStatus.STATUS_CALLING) startRecord()
             }
         })
     }
 
-    private suspend fun setupSttService() {
-        sttService.initRecognizer()
-    }
+    private suspend fun setupSttService() { sttService.initRecognizer() }
 
     fun getA2bsService(): A2BSService = a2bsService!!
-
     fun getPiperTtsEngine(): PiperTtsEngine = piperTtsEngine
 
     override fun onResume() {
         super.onResume()
-
-        // Android 11+: user may have granted MANAGE_EXTERNAL_STORAGE in Settings and returned
-        if (StoragePermission.hasPermission(this)
-            && !initComplete.isCompleted
-            && !serviceInitializing
+        // Android 11+: storage permission granted → start services
+        if (!initComplete.isCompleted && !serviceInitializing
             && downloadManager.isDownloadComplete()
             && !DebugModule.DEBUG_DISABLE_SERVICE_AUTO_START
         ) {
             lifecycleScope.launch { setupServices() }
-            return
         }
-
-        // Model changed in Settings → reload LLM engine with new model
-        if (initComplete.isCompleted) {
-            val selectedModel = MainSettings.getLlmModelName(this)
-                ?: MHConfig.LLM_MODEL_FILENAME_DEFAULT
-            if (llmService.isModelChanged(selectedModel)) {
-                Log.i(TAG, "onResume: model changed to '$selectedModel', reloading LLM")
-                lifecycleScope.launch { reloadLlm(selectedModel) }
-            }
-        }
-    }
-
-    private suspend fun reloadLlm(modelName: String) {
-        Log.i(TAG, "reloadLlm: $modelName")
-        withContext(Dispatchers.IO) {
-            llmService.init(modelName)
-        }
-        llmService.startNewSession()
-        Log.i(TAG, "reloadLlm done, engine ready=${llmService.isEngineReady()}")
     }
 
     override fun onStart() {
         super.onStart()
-        if (serviceInitialized()) {
-            mainView.updateDebugInfo()
-        }
+        if (serviceInitialized()) mainView.updateDebugInfo()
     }
 
     override fun onStop() {
         Log.d(TAG, "onStop")
         super.onStop()
-        if (chatStatus == ChatStatus.STATUS_CALLING) {
-            onEndCall()
-        }
+        if (chatStatus == ChatStatus.STATUS_CALLING) onEndCall()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         sttService.destroy()
         piperTtsEngine.destroy()
-        llmService.unload()
-        if (memoryMonitor != null) {
-            memoryMonitor!!.stopMonitoring()
-        }
+        faqService.release()
+        if (memoryMonitor != null) memoryMonitor!!.stopMonitoring()
         exitProcess(0)
     }
 
@@ -375,9 +339,7 @@ class MainActivity : AppCompatActivity(),
     }
 
     override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray,
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
@@ -390,7 +352,6 @@ class MainActivity : AppCompatActivity(),
                 }
             }
             StoragePermission.REQUEST_READ_STORAGE -> {
-                // Android ≤ 10: result of READ_EXTERNAL_STORAGE request
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     if (downloadManager.isDownloadComplete() && !DebugModule.DEBUG_DISABLE_SERVICE_AUTO_START) {
                         lifecycleScope.launch { setupServices() }
@@ -402,77 +363,15 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
-    private suspend fun loadNNRModel() {
-        nnrAvatarRender.waitForInitComplete()
-    }
+    private suspend fun loadNNRModel() { nnrAvatarRender.waitForInitComplete() }
 
-    /**
-     * Load LLM model.
-     * Priority: saved model name from Settings → scan Downloads for .litertlm files
-     *            → fallback default filename [MHConfig.LLM_MODEL_FILENAME_DEFAULT]
-     */
-    private suspend fun loadLLMModel() {
-        val modelName = resolveLlmModelName()
-        Log.i(TAG, "loadLLMModel: resolved model='$modelName'")
-        val ok = llmService.init(modelName)
-        Log.i(TAG, "loadLLMModel: init result=$ok, engine ready=${llmService.isEngineReady()}")
-    }
-
-    private suspend fun resolveLlmModelName(): String = withContext(Dispatchers.IO) {
-        // 1. Use previously saved model name if still valid
-        val savedName = MainSettings.getLlmModelName(this@MainActivity)
-        if (savedName != null) {
-            // Verify the file still exists somewhere reachable
-            val searchRoots = listOf(
-                "/sdcard",
-                "/sdcard/Download",
-                "/storage/emulated/0",
-                "/storage/emulated/0/Download",
-                this@MainActivity.getExternalFilesDir(null)?.absolutePath ?: ""
-            )
-            val stillValid = searchRoots.any { File(it, savedName).exists() }
-            if (stillValid) {
-                Log.i(TAG, "Using saved LLM model name: $savedName")
-                return@withContext savedName
-            }
-        }
-
-        // 2. Scan /sdcard/Download/ for .litertlm files
-        val found = scanLitertlmModelsInDownloads()
-        if (found.isNotEmpty()) {
-            val name = found.first().name
-            MainSettings.setLlmModelName(this@MainActivity, name)
-            Log.i(TAG, "Auto-selected LLM model from Downloads: $name")
-            return@withContext name
-        }
-
-        // 3. Fallback to default
-        Log.w(TAG, "No .litertlm model found, using default: ${MHConfig.LLM_MODEL_FILENAME_DEFAULT}")
-        MHConfig.LLM_MODEL_FILENAME_DEFAULT
-    }
-
-    /**
-     * Scan the public Downloads directory for .litertlm files.
-     */
-    fun scanLitertlmModelsInDownloads(): List<File> {
-        val downloadDir = Environment.getExternalStoragePublicDirectory(
-            Environment.DIRECTORY_DOWNLOADS
-        )
-        return try {
-            downloadDir.listFiles()
-                ?.filter { it.isFile && it.name.endsWith(".litertlm", ignoreCase = true) }
-                ?.sortedByDescending { it.lastModified() }
-                ?: emptyList()
-        } catch (e: Exception) {
-            Log.e(TAG, "scanLitertlmModelsInDownloads failed", e)
-            emptyList()
-        }
+    private suspend fun loadFaqEngine() {
+        val ok = faqService.init()
+        Log.i(TAG, "loadFaqEngine: ready=$ok")
     }
 
     private suspend fun loadTTSModel() {
-        withContext(Dispatchers.IO) {
-            piperTtsEngine.init()
-        }
+        withContext(Dispatchers.IO) { piperTtsEngine.init() }
     }
 
     private suspend fun loadA2BSModel() {
@@ -480,9 +379,7 @@ class MainActivity : AppCompatActivity(),
         createAudioBlendShapePlayer()
     }
 
-    fun stopRecord() {
-        sttService.stopRecord()
-    }
+    fun stopRecord() { sttService.stopRecord() }
 
     fun startRecord() {
         mainView.textStatus.text = getString(R.string.listening)
@@ -491,16 +388,10 @@ class MainActivity : AppCompatActivity(),
 
     fun getNnrRuntime(): NnrAvatarRender = nnrAvatarRender
 
-    override fun onDownloadStart() {
-        Log.d(TAG, "Download started")
-    }
+    override fun onDownloadStart() { Log.d(TAG, "Download started") }
 
-    override fun onDownloadProgress(
-        progress: Double, currentBytes: Long, totalBytes: Long, speedInfo: String,
-    ) {
-        lifecycleScope.launch {
-            mainView.updateDownloadProgress(currentBytes, totalBytes, speedInfo)
-        }
+    override fun onDownloadProgress(progress: Double, currentBytes: Long, totalBytes: Long, speedInfo: String) {
+        lifecycleScope.launch { mainView.updateDownloadProgress(currentBytes, totalBytes, speedInfo) }
     }
 
     override fun onDownloadComplete(success: Boolean, file: File?) {
@@ -518,8 +409,6 @@ class MainActivity : AppCompatActivity(),
 
     companion object {
         private const val TAG = "MainActivity"
-        init {
-            System.loadLibrary("taoavatar")
-        }
+        init { System.loadLibrary("taoavatar") }
     }
 }
