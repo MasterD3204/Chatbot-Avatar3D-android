@@ -4,32 +4,42 @@ import android.content.Context
 import android.util.Log
 import com.taobao.meta.avatar.llm.litert.LiteRtLlmEngine
 import com.taobao.meta.avatar.settings.MainSettings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.cancellable
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.withContext
 
-/**
- * LlmService wraps [LiteRtLlmEngine] and exposes the same API surface
- * previously provided by the MNN-based ChatSession/ChatService.
- *
- * The output Flow<Pair<String?, String>> matches what MainActivity expects:
- *   - first  = partial token (null signals end of stream — never emitted here)
- *   - second = full accumulated text so far
- */
 class LlmService(private val context: Context) {
 
     private var llmEngine: LlmEngine? = null
+    private var loadedModelName: String? = null
     private var stopRequested = false
 
-    /** Init engine. [modelName] is the .litertlm filename to search for. */
+    /**
+     * Init (hoặc re-init) engine với model mới.
+     * Nếu đã có engine cũ, unload trước.
+     * Tự động bật [noThink] khi model là Qwen3 (thêm /no_think prefix vào query).
+     */
     suspend fun init(modelName: String?): Boolean {
         if (modelName.isNullOrBlank()) {
             Log.e(TAG, "init FAILED: modelName is null or blank")
             return false
         }
-        Log.i(TAG, "init: modelName='$modelName'")
+
+        // Unload engine cũ nếu có
+        if (llmEngine != null) {
+            Log.i(TAG, "Unloading previous engine (model='$loadedModelName')")
+            withContext(Dispatchers.IO) { llmEngine?.release() }
+            llmEngine = null
+            loadedModelName = null
+        }
+
+        val isQwen3 = isQwen3Model(modelName)
+        Log.i(TAG, "init: model='$modelName' noThink=$isQwen3")
+
         val prompt = MainSettings.getLlmPrompt(context)
         val engine = LiteRtLlmEngine(
             context = context,
@@ -40,27 +50,26 @@ class LlmService(private val context: Context) {
             topK = 8,
             topP = 0.95f,
             maxHistoryTurns = 2,
-            noThink = false
+            noThink = isQwen3
         )
         val ok = engine.init()
         if (ok) {
             llmEngine = engine
-            Log.i(TAG, "✅ LLM engine ready")
+            loadedModelName = modelName
+            Log.i(TAG, "✅ LLM engine ready (model=$modelName, noThink=$isQwen3)")
         } else {
-            Log.e(TAG, "❌ LLM engine init FAILED")
+            Log.e(TAG, "❌ LLM engine init FAILED (model=$modelName)")
         }
         return ok
     }
 
-    /** Reset context window / history for a new chat session. */
+    /** True nếu [newModelName] khác với model đang chạy. */
+    fun isModelChanged(newModelName: String): Boolean = newModelName != loadedModelName
+
     fun startNewSession() {
         llmEngine?.resetHistory()
     }
 
-    /**
-     * Stream LLM tokens for [text].
-     * Emits pairs of (partialToken, accumulatedText).
-     */
     fun generate(text: String): Flow<Pair<String?, String>> {
         stopRequested = false
         if (llmEngine == null) {
@@ -70,12 +79,8 @@ class LlmService(private val context: Context) {
         Log.i(TAG, "generate: query='${text.take(80)}'")
         val result = StringBuilder()
         return llmEngine!!.chatStream(text)
-            .onEach { token ->
-                result.append(token)
-            }
-            .map { token ->
-                Pair(token, result.toString())
-            }
+            .onEach { token -> result.append(token) }
+            .map { token -> Pair(token, result.toString()) }
             .cancellable()
     }
 
@@ -88,9 +93,19 @@ class LlmService(private val context: Context) {
     fun unload() {
         llmEngine?.release()
         llmEngine = null
+        loadedModelName = null
     }
 
     companion object {
         private const val TAG = "LlmService"
+
+        /**
+         * Nhận dạng Qwen3 model để bật chế độ /no_think.
+         * Match: qwen3, qwen-3 (case-insensitive).
+         */
+        fun isQwen3Model(modelName: String): Boolean {
+            val lower = modelName.lowercase()
+            return lower.contains("qwen3") || lower.contains("qwen-3")
+        }
     }
 }

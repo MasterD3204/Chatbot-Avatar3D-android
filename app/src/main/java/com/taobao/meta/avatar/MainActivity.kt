@@ -310,6 +310,7 @@ class MainActivity : AppCompatActivity(),
 
     override fun onResume() {
         super.onResume()
+
         // Android 11+: user may have granted MANAGE_EXTERNAL_STORAGE in Settings and returned
         if (StoragePermission.hasPermission(this)
             && !initComplete.isCompleted
@@ -318,7 +319,27 @@ class MainActivity : AppCompatActivity(),
             && !DebugModule.DEBUG_DISABLE_SERVICE_AUTO_START
         ) {
             lifecycleScope.launch { setupServices() }
+            return
         }
+
+        // Model changed in Settings → reload LLM engine with new model
+        if (initComplete.isCompleted) {
+            val selectedModel = MainSettings.getLlmModelName(this)
+                ?: MHConfig.LLM_MODEL_FILENAME_DEFAULT
+            if (llmService.isModelChanged(selectedModel)) {
+                Log.i(TAG, "onResume: model changed to '$selectedModel', reloading LLM")
+                lifecycleScope.launch { reloadLlm(selectedModel) }
+            }
+        }
+    }
+
+    private suspend fun reloadLlm(modelName: String) {
+        Log.i(TAG, "reloadLlm: $modelName")
+        withContext(Dispatchers.IO) {
+            llmService.init(modelName)
+        }
+        llmService.startNewSession()
+        Log.i(TAG, "reloadLlm done, engine ready=${llmService.isEngineReady()}")
     }
 
     override fun onStart() {

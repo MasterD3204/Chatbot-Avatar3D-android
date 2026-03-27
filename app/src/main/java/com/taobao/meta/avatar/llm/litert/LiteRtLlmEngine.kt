@@ -177,9 +177,11 @@ class LiteRtLlmEngine(
             }
     }
 
-    private fun buildSendFlow(query: String, allowGpuFallback: Boolean): Flow<String> =
-        if (noThink) buildNoThinkFlow(query, allowGpuFallback)
-        else buildNormalFlow(query, allowGpuFallback)
+    private fun buildSendFlow(query: String, allowGpuFallback: Boolean): Flow<String> {
+        // Qwen3 noThink: prepend /no_think to disable think tokens — use normal conversation flow
+        val actualQuery = if (noThink) "/no_think\n$query" else query
+        return buildNormalFlow(actualQuery, allowGpuFallback)
+    }
 
     private fun buildNormalFlow(query: String, allowGpuFallback: Boolean): Flow<String> = callbackFlow {
         val conv = conversation ?: run { close(); return@callbackFlow }
@@ -252,15 +254,12 @@ class LiteRtLlmEngine(
         runCatching { conversation?.close() }
         runCatching { engine?.close() }
         initialized = false; engine = null; conversation = null
-        manualHistory.clear()
         Log.i(TAG, "released")
     }
 
     override fun resetHistory() {
         val eng = engine ?: return
         runCatching { conversation?.close() }
-        manualHistory.clear()
-        currentReplyBuf.clear()
         conversation = try {
             eng.createConversation(
                 ConversationConfig(
@@ -288,11 +287,6 @@ class LiteRtLlmEngine(
         else -> backend.javaClass.simpleName
     }
 
-    private fun addToHistory(userMsg: String, assistantMsg: String) {
-        manualHistory.add(Pair(userMsg, assistantMsg))
-        while (manualHistory.size > maxHistoryTurns) manualHistory.removeAt(0)
-    }
-
     private fun createFreshConversation(): Conversation? {
         val eng = engine ?: return null
         runCatching { conversation?.close() }
@@ -306,6 +300,11 @@ class LiteRtLlmEngine(
         } catch (e: Exception) {
             Log.e(TAG, "createFreshConversation failed", e); null
         }
+    }
+
+    private fun addToHistory(userMsg: String, assistantMsg: String) {
+        manualHistory.add(Pair(userMsg, assistantMsg))
+        while (manualHistory.size > maxHistoryTurns) manualHistory.removeAt(0)
     }
 
     private fun buildReplayPrompt(currentQuery: String): String {
