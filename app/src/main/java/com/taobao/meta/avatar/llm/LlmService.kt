@@ -26,9 +26,10 @@ class LlmService(private val context: Context) {
     /** Init engine. [modelName] is the .litertlm filename to search for. */
     suspend fun init(modelName: String?): Boolean {
         if (modelName.isNullOrBlank()) {
-            Log.e(TAG, "modelName is null or blank — cannot init LLM")
+            Log.e(TAG, "init FAILED: modelName is null or blank")
             return false
         }
+        Log.i(TAG, "init: modelName='$modelName'")
         val prompt = MainSettings.getLlmPrompt(context)
         val engine = LiteRtLlmEngine(
             context = context,
@@ -42,7 +43,12 @@ class LlmService(private val context: Context) {
             noThink = false
         )
         val ok = engine.init()
-        if (ok) llmEngine = engine
+        if (ok) {
+            llmEngine = engine
+            Log.i(TAG, "✅ LLM engine ready")
+        } else {
+            Log.e(TAG, "❌ LLM engine init FAILED")
+        }
         return ok
     }
 
@@ -57,8 +63,13 @@ class LlmService(private val context: Context) {
      */
     fun generate(text: String): Flow<Pair<String?, String>> {
         stopRequested = false
+        if (llmEngine == null) {
+            Log.e(TAG, "generate() called but llmEngine is NULL — LLM not initialized!")
+            return emptyFlow()
+        }
+        Log.i(TAG, "generate: query='${text.take(80)}'")
         val result = StringBuilder()
-        return (llmEngine?.chatStream(text) ?: emptyFlow())
+        return llmEngine!!.chatStream(text)
             .onEach { token ->
                 result.append(token)
             }
@@ -67,6 +78,8 @@ class LlmService(private val context: Context) {
             }
             .cancellable()
     }
+
+    fun isEngineReady(): Boolean = llmEngine?.isReady() == true
 
     fun requestStop() {
         stopRequested = true

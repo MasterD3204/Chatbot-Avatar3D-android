@@ -269,12 +269,15 @@ class MainActivity : AppCompatActivity(),
         audioBendShapePlayer?.startNewSession(answerSession)
         lifecycleScope.launch {
             val callingSessionId = this@MainActivity.callingSessionId
+            Log.i(TAG, "processAsrText: starting LLM generate, engineReady=${llmService.isEngineReady()}")
             llmService.generate(text).collect { pair ->
-                audioBendShapePlayer?.playStreamText(pair.first)
                 if (pair.first != null) {
+                    Log.v(TAG, "LLM token: '${pair.first}'")
+                    audioBendShapePlayer?.playStreamText(pair.first)
                     llmPresenter.onLlmTextUpdate(pair.first!!, callingSessionId)
                 }
             }
+            Log.i(TAG, "processAsrText: LLM generate finished")
         }.apply {
             chatSessionJobs.add(this)
         }
@@ -389,8 +392,9 @@ class MainActivity : AppCompatActivity(),
      */
     private suspend fun loadLLMModel() {
         val modelName = resolveLlmModelName()
-        Log.i(TAG, "Loading LLM model: $modelName")
-        llmService.init(modelName)
+        Log.i(TAG, "loadLLMModel: resolved model='$modelName'")
+        val ok = llmService.init(modelName)
+        Log.i(TAG, "loadLLMModel: init result=$ok, engine ready=${llmService.isEngineReady()}")
     }
 
     private suspend fun resolveLlmModelName(): String = withContext(Dispatchers.IO) {

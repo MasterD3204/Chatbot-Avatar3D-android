@@ -106,7 +106,12 @@ class LiteRtLlmEngine(
     }
 
     private fun tryInit(modelPath: String, backend: Backend): Boolean = try {
-        Log.d(TAG, "--- Attempting init with backend=$backend ---")
+        val backendName = when (backend) {
+            is Backend.GPU -> "GPU"
+            is Backend.CPU -> "CPU"
+            else -> backend.javaClass.simpleName
+        }
+        Log.i(TAG, "--- Attempting init with backend=$backendName ---")
         Log.d(TAG, "  modelPath=$modelPath")
         Log.d(TAG, "  maxTokens=$maxTokens, topK=$topK, topP=$topP, temperature=$temperature")
 
@@ -138,7 +143,12 @@ class LiteRtLlmEngine(
         Log.d(TAG, "  ✅ Conversation created successfully")
 
         engine = eng; conversation = conv; initialized = true
-        Log.i(TAG, "🚀 LiteRT ready on $backend at $modelPath")
+        val backendName = when (backend) {
+            is Backend.GPU -> "GPU"
+            is Backend.CPU -> "CPU"
+            else -> backend.javaClass.simpleName
+        }
+        Log.i(TAG, "🚀 LiteRT ready on $backendName at $modelPath")
         true
     } catch (e: Exception) {
         Log.e(TAG, "❌ $backend init failed at $modelPath", e)
@@ -149,16 +159,24 @@ class LiteRtLlmEngine(
     }
 
     override fun chatStream(query: String): Flow<String> = callbackFlow {
+        Log.i(TAG, "chatStream: query='${query.take(80)}' noThink=$noThink initialized=$initialized")
+        if (!initialized || conversation == null) {
+            Log.e(TAG, "chatStream: engine not ready (initialized=$initialized, conversation=${conversation != null})")
+            trySend("[Lỗi: Model chưa sẵn sàng]")
+            close()
+            return@callbackFlow
+        }
+
         if (noThink) {
-            // ── noThink mode: manual history với giới hạn maxHistoryTurns ─────────
+            // ── noThink mode ──────────────────────────────────────────────────────
             val freshConv = createFreshConversation() ?: run {
-                trySend("Lỗi: Không thể tạo conversation."); close(); return@callbackFlow
+                Log.e(TAG, "chatStream: createFreshConversation returned null")
+                trySend("[Lỗi: Không thể tạo conversation]"); close(); return@callbackFlow
             }
             conversation = freshConv
             currentReplyBuf.clear()
-
-            // Replay lịch sử (đã strip <think>) vào Conversation mới
             val fullPrompt = buildReplayPrompt(query)
+            Log.d(TAG, "chatStream (noThink): sending prompt len=${fullPrompt.length}")
 
             freshConv.sendMessageAsync(
                 Contents.of(Content.Text(fullPrompt)),
@@ -172,39 +190,40 @@ class LiteRtLlmEngine(
                     override fun onDone() {
                         val cleanReply = stripThinkTags(currentReplyBuf.toString())
                         addToHistory(query, cleanReply)
-                        Log.d(TAG, "History saved: ${manualHistory.size} turns (max $maxHistoryTurns)")
+                        Log.i(TAG, "chatStream done. History=${manualHistory.size}/$maxHistoryTurns reply_len=${cleanReply.length}")
                         close()
                     }
 
                     override fun onError(t: Throwable) {
+                        Log.e(TAG, "chatStream onError (noThink)", t)
                         if (t is CancellationException) close()
-                        else {
-                            trySend("\n[Lỗi: ${t.message}]"); close()
-                        }
+                        else { trySend("\n[Lỗi: ${t.message}]"); close() }
                     }
                 })
         } else {
-            // ── Normal mode: LiteRT native Conversation history ──────────────────
-            val conv = conversation
-                ?: run { trySend("Lỗi: Model chưa khởi tạo."); close(); return@callbackFlow }
+            // ── Normal mode ───────────────────────────────────────────────────────
+            val conv = conversation!!
+            Log.d(TAG, "chatStream (normal): sending query to conversation")
             conv.sendMessageAsync(Contents.of(Content.Text(query)), object : MessageCallback {
                 override fun onMessage(msg: Message) {
-                    trySend(msg.toString())
+                    val token = msg.toString()
+                    Log.v(TAG, "token: '$token'")
+                    trySend(token)
                 }
 
                 override fun onDone() {
+                    Log.i(TAG, "chatStream done (normal mode)")
                     close()
                 }
 
                 override fun onError(t: Throwable) {
+                    Log.e(TAG, "chatStream onError (normal)", t)
                     if (t is CancellationException) close()
-                    else {
-                        trySend("\n[Lỗi: ${t.message}]"); close()
-                    }
+                    else { trySend("\n[Lỗi: ${t.message}]"); close() }
                 }
             })
         }
-        awaitClose()
+        awaitClose { Log.d(TAG, "chatStream awaitClose") }
     }
 
     override fun release() {
