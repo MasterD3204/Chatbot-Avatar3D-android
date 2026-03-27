@@ -60,12 +60,14 @@ class AudioChunksPlayer {
             channelConfig,
             audioFormat
         )
+        // Use 4× minimum to reduce write frequency and prevent audio underruns
+        val bufferSize = minBufferSize * 4
         audioTrack = AudioTrack.Builder()
             .setAudioFormat(AudioFormat.Builder()
                 .setEncoding(audioFormat)
                 .setSampleRate(_sampleRate)
                 .setChannelMask(channelConfig).build())
-            .setBufferSizeInBytes(minBufferSize).build()
+            .setBufferSizeInBytes(bufferSize).build()
 
         if (state != AudioTrack.STATE_UNINITIALIZED) {
             val params = audioTrack!!.playbackParams
@@ -167,26 +169,12 @@ class AudioChunksPlayer {
 
     suspend fun playChunk(pcmData: ShortArray) {
         totalSize += pcmData.size
-        var maxVal = Short.MIN_VALUE
-        var minVal = Short.MAX_VALUE
-        var sum = 0L
-        for (sample in pcmData) {
-            if (sample > maxVal) maxVal = sample
-            if (sample < minVal) minVal = sample
-            sum += sample
-        }
-        val avg = sum.toDouble() / pcmData.size
-        Log.d(
-            TAG,
-            "Stats → max=$maxVal, min=$minVal, avg=${"%.2f".format(avg)}"
-        )
-        Log.d(TAG, "playChunk: ${pcmData.size}")
         try {
             playerScope.async {
                 audioTrack?.write(pcmData, 0, pcmData.size, AudioTrack.WRITE_BLOCKING)
             }.await()
-        } catch (Exception: Exception) {
-            Log.e(TAG, "playChunk: ", Exception)
+        } catch (e: Exception) {
+            Log.e(TAG, "playChunk: ", e)
         }
     }
 

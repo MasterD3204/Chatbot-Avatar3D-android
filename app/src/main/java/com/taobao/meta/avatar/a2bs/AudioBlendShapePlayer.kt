@@ -66,7 +66,8 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
     private val CONFIG_SMOOTH_DURATION = 200
     private val CONFIG_CHAT_SMOOTH_DURATION = 100
     private val CONFIG_NEED_SMOOTH_TO_CHAT = false
-    private val configThreadNum = 2
+    // Use (cpuCores / 2) threads for parallel TTS+A2BS, minimum 2
+    private val configThreadNum = (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(2)
 
     private var totalAudioBsFrame = 0
     private var lastId = -1
@@ -252,7 +253,7 @@ class AudioBlendShapePlayer(nnrAvatarRender: NnrAvatarRender, activity: MainActi
         val delimiters = "[.,!。，！？?\n、：；:]"
         if (currentText.contains(delimiters.toRegex())) {
             Log.d(TAG, "is delimiter")
-            if (nextSegmentText.isNotEmpty() && segmentTokenCount >= 3) {
+            if (nextSegmentText.isNotEmpty() && segmentTokenCount >= 2) {
                 playText(nextSegmentText, nextSegmentId++, false)
                 nextSegmentText = ""
                 segmentTokenCount = 0
