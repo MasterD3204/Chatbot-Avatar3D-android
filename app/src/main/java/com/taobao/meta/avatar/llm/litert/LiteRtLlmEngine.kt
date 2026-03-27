@@ -143,11 +143,6 @@ class LiteRtLlmEngine(
         Log.d(TAG, "  ✅ Conversation created successfully")
 
         engine = eng; conversation = conv; initialized = true
-        val backendName = when (backend) {
-            is Backend.GPU -> "GPU"
-            is Backend.CPU -> "CPU"
-            else -> backend.javaClass.simpleName
-        }
         Log.i(TAG, "🚀 LiteRT ready on $backendName at $modelPath")
         true
     } catch (e: Exception) {
