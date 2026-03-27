@@ -377,7 +377,7 @@ class MainActivity : AppCompatActivity(),
                 "/sdcard/Download",
                 "/storage/emulated/0",
                 "/storage/emulated/0/Download",
-                context.getExternalFilesDir(null)?.absolutePath ?: ""
+                this@MainActivity.getExternalFilesDir(null)?.absolutePath ?: ""
             )
             val stillValid = searchRoots.any { File(it, savedName).exists() }
             if (stillValid) {
