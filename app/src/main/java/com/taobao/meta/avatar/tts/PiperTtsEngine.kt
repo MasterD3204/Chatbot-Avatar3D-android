@@ -29,6 +29,8 @@ import java.io.IOException
  */
 class PiperTtsEngine(private val context: Context) {
 
+    private val preProcessor = PiperTextPreProcessor(context)
+
     companion object {
         private const val TAG = "PiperTtsEngine"
 
@@ -110,8 +112,11 @@ class PiperTtsEngine(private val context: Context) {
         }
         if (text.isBlank()) return Pair(FloatArray(0), 0)
 
+        val normalized = preProcessor.process(text)
+        Log.d(TAG, "generate: '${text.take(40)}' → '${normalized.take(60)}'")
+
         return try {
-            val audio = engine.generate(text = text, sid = SPEAKER_ID, speed = SPEED)
+            val audio = engine.generate(text = normalized, sid = SPEAKER_ID, speed = SPEED)
             Pair(audio.samples, audio.sampleRate)
         } catch (e: Exception) {
             Log.e(TAG, "generate() failed for text='${text.take(40)}'", e)
