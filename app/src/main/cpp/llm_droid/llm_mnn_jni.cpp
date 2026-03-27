@@ -169,7 +169,7 @@ Java_com_alibaba_mnnllm_android_ChatSession_initNative(JNIEnv *env, jobject thiz
     MH_DEBUG("MNN_DEBUG createLLM BeginLoad %s", model_dir);
     bool use_mmap = !root_cache_dir_str.empty();
     MNN::BackendConfig backendConfig;
-    executor = MNN::Express::Executor::newExecutor(MNN_FORWARD_CPU, backendConfig, 1);
+    executor = MNN::Express::Executor::newExecutor(MNN_FORWARD_CPU, backendConfig, 4);
     MNN::Express::ExecutorScope s(executor);
     json extra_config;
     extra_config["use_mmap"] = use_mmap;
