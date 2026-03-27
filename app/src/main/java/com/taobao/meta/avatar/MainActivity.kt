@@ -28,6 +28,7 @@ import com.taobao.meta.avatar.nnr.AvatarTextureView
 import com.taobao.meta.avatar.nnr.NnrAvatarRender
 import com.taobao.meta.avatar.record.RecordPermission
 import com.taobao.meta.avatar.record.RecordPermission.REQUEST_RECORD_AUDIO_PERMISSION
+import com.taobao.meta.avatar.record.StoragePermission
 import com.taobao.meta.avatar.settings.MainSettings
 import com.taobao.meta.avatar.tts.PiperTtsEngine
 import com.taobao.meta.avatar.utils.MemoryMonitor
@@ -93,7 +94,9 @@ class MainActivity : AppCompatActivity(),
         debugModule.setupDebug(this)
         sttService = AndroidSttService(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        if (downloadManager.isDownloadComplete() && !DebugModule.DEBUG_DISABLE_SERVICE_AUTO_START) {
+        if (!StoragePermission.hasPermission(this)) {
+            StoragePermission.requestPermission(this)
+        } else if (downloadManager.isDownloadComplete() && !DebugModule.DEBUG_DISABLE_SERVICE_AUTO_START) {
             lifecycleScope.launch {
                 setupServices()
             }
@@ -302,6 +305,19 @@ class MainActivity : AppCompatActivity(),
 
     fun getPiperTtsEngine(): PiperTtsEngine = piperTtsEngine
 
+    override fun onResume() {
+        super.onResume()
+        // Android 11+: user may have granted MANAGE_EXTERNAL_STORAGE in Settings and returned
+        if (StoragePermission.hasPermission(this)
+            && !initComplete.isCompleted
+            && !serviceInitializing
+            && downloadManager.isDownloadComplete()
+            && !DebugModule.DEBUG_DISABLE_SERVICE_AUTO_START
+        ) {
+            lifecycleScope.launch { setupServices() }
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         if (serviceInitialized()) {
@@ -347,6 +363,16 @@ class MainActivity : AppCompatActivity(),
                 } else {
                     Toast.makeText(this, R.string.record_permission_denied, Toast.LENGTH_SHORT).show()
                     chatStatus = ChatStatus.STATUS_IDLE
+                }
+            }
+            StoragePermission.REQUEST_READ_STORAGE -> {
+                // Android ≤ 10: result of READ_EXTERNAL_STORAGE request
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    if (downloadManager.isDownloadComplete() && !DebugModule.DEBUG_DISABLE_SERVICE_AUTO_START) {
+                        lifecycleScope.launch { setupServices() }
+                    }
+                } else {
+                    Toast.makeText(this, R.string.storage_permission_denied, Toast.LENGTH_LONG).show()
                 }
             }
         }
