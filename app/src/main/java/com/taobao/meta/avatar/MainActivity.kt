@@ -265,18 +265,26 @@ class MainActivity : AppCompatActivity(),
 
     /**
      * Split text into sentence-level segments for TTS.
-     * "Xin chào! Tôi là MISA." → ["Xin chào!", "Tôi là MISA."]
+     * Splits at sentence-ending punctuation AND newlines.
+     * "Xin chào!\nTôi là MISA." → ["Xin chào!", "Tôi là MISA."]
      */
     private fun splitIntoSentences(text: String): List<String> {
         val sentenceEnd = setOf('.', '!', '?', '。', '！', '？')
         val segments = mutableListOf<String>()
         val current = StringBuilder()
         for (char in text) {
-            current.append(char)
-            if (char in sentenceEnd) {
+            if (char == '\n') {
+                // Newline = paragraph break: flush current segment without appending \n
                 val seg = current.toString().trim()
                 if (seg.isNotEmpty()) segments.add(seg)
                 current.clear()
+            } else {
+                current.append(char)
+                if (char in sentenceEnd) {
+                    val seg = current.toString().trim()
+                    if (seg.isNotEmpty()) segments.add(seg)
+                    current.clear()
+                }
             }
         }
         val remaining = current.toString().trim()

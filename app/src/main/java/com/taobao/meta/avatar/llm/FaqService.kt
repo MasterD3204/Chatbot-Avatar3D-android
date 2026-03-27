@@ -40,13 +40,15 @@ class FaqService(context: Context) {
      */
     suspend fun getAnswer(query: String): String {
         val answers = ragEngine.search(query)
-        return if (!answers.isNullOrEmpty()) {
+        val raw = if (!answers.isNullOrEmpty()) {
             Log.i(TAG, "FAQ hit for '$query': ${answers.first().take(60)}")
             answers.first()
         } else {
             Log.i(TAG, "FAQ miss for '$query'")
             NO_ANSWER
         }
+        // Convert literal \n escape sequences → actual newline characters
+        return raw.replace("\\n", "\n")
     }
 
     fun release() {
